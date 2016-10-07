@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "node-uuid": "^1.4.7",
+    "particle-api-js": "^6.0.7",
     "request": "^2.75.0"
   }
 }

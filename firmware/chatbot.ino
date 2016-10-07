@@ -13,6 +13,11 @@ TCPClient client;
 void setup() {
     Serial.begin(115200);
     pinMode(MICROPHONE_PIN, INPUT);
+    
+    pinMode(D7, OUTPUT);
+    digitalWrite(D7, LOW);
+    
+    Particle.function("recognized", recognized);
      
      client.connect("chatrobot.azurewebsites.net");
 
@@ -24,6 +29,18 @@ void loop() {
     if (client.connected()) {
         listenAndSend(500);
     }
+}
+
+int recognized(String text) {
+    Serial.println("Recognized: " + text);
+    
+    if (text.toLowerCase().indexOf("code") >= 0) {
+        digitalWrite(D7, HIGH);
+        delay(5000);
+        digitalWrite(D7, LOW);
+    }
+    
+    return 0;
 }
 
 void listenAndSend(int delay) {

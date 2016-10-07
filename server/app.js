@@ -1,6 +1,9 @@
 var net = require('net');
 var request = require('request');
 var uuid = require('node-uuid');
+var Particle = require('particle-api-js');
+var particle = new Particle();
+var particleLoginToken = "";
 
 var port = process.env.PORT || 3000;
 
@@ -11,15 +14,25 @@ var audioFileName = "recording.wav";
 
 net.createServer(function(sock) {
 	console.log('CONNECTED: ' + sock.remoteAddress +':'+ sock.remotePort);
+
+	particle.login({username: process.env.PARTICLE_USERNAME, password: process.env.PARTICLE_PASSWORD}).then(
+		function(data) {
+			particleLoginToken = data.body.access_token;
+		});
+
+
 	var outStream = fs.createWriteStream(audioFileName);
 
 	writeWavHeader(outStream);
+	console.log("Ready for data");
 
 	sock.on('data', function(data) {
 		try {
-			console.log("GOT DATA");
+			process.stdout.write(".");
 			outStream.write(data);
-			console.log("got chunk of " + data.toString('hex'));
+			
+			// DEBUG
+			// console.log("got chunk of " + data.toString('hex'));
 		}
 		catch (ex) {
 			console.error("Er!" + ex);
@@ -38,9 +51,10 @@ net.createServer(function(sock) {
 					console.log(err);
 				}
 				else if (body.header.status === 'success') {
+					particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'recognized', argument: body.header.name, auth: particleLoginToken });
 					console.log(body.header.name);
 				} else {
-					console.log(body.header)
+					console.log(body.header);
 				};
 			});
 		});
