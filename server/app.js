@@ -9,8 +9,17 @@ var port = process.env.PORT || 3000;
 
 var fs = require("fs");
 var samplesLength = 1000;
-var sampleRate = 8000;
+var sampleRate = 16000;
+var endPacketSize = 100;
+var bitsPerSample = 8;
+var numChannels = 1;
 var audioFileName = "recording.wav";
+var isRecording = false;
+
+var recordingStart = 0;
+var recordingLength = 0;
+
+var outStream;
 
 net.createServer(function(sock) {
 	console.log('CONNECTED: ' + sock.remoteAddress +':'+ sock.remotePort);
@@ -18,32 +27,41 @@ net.createServer(function(sock) {
 	particle.login({username: process.env.PARTICLE_USERNAME, password: process.env.PARTICLE_PASSWORD}).then(
 		function(data) {
 			particleLoginToken = data.body.access_token;
-		});
+	});
 
-
-	var outStream = fs.createWriteStream(audioFileName);
-
-	writeWavHeader(outStream);
 	console.log("Ready for data");
 
 	sock.on('data', function(data) {
-		try {
-			process.stdout.write(".");
-			outStream.write(data);
-			
+		if (!isRecording) 
+			writeWavHeader();
+
+		try {			
 			// DEBUG
 			// console.log("got chunk of " + data.toString('hex'));
-		}
-		catch (ex) {
+
+			if (isRecordingDone(data)) {
+				console.log();
+				console.log('Recorded for ' + recordingLength / 1000 + ' seconds');
+				outStream.end();
+				recognizeRecording();
+			} else {
+				process.stdout.write(".");
+				outStream.write(data);
+			}
+		} catch (ex) {
 			console.error("Er!" + ex);
 		}
 	});
 
-	setTimeout(function() {
-		console.log('Recorded for 10 seconds');
-		outStream.end();
-		sock.destroy();
+	// Add a 'close' event handler to this instance of socket
+	sock.on('close', function(data) {
+		console.log('CLOSED: ' + sock.remoteAddress +' '+ sock.remotePort);
+	});
 
+}).listen(port);
+console.log('Waiting for TCP client connection on port: ' + port);
+
+var recognizeRecording = function() {
 		getAccessToken(process.env.MICROSOFT_SPEECH_API_KEY, function(err, token) {
 			console.log('Got speech access token');
 			speechToText(audioFileName, token, function(err, body) {
@@ -58,45 +76,38 @@ net.createServer(function(sock) {
 				};
 			});
 		});
-		
-	}, 10 * 1000);
-
-	
-	// Add a 'close' event handler to this instance of socket
-	sock.on('close', function(data) {
-		console.log('CLOSED: ' + sock.remoteAddress +' '+ sock.remotePort);
-	});
-
-}).listen(port);
-console.log('Waiting for TCP client connection on port: ' + port);
+}
 
 var getAccessToken = function(key, callback) {
   request.post({
     url: 'https://api.cognitive.microsoft.com/sts/v1.0/issueToken', 
 	headers: {
        'Content-Type': 'application/x-www-form-urlencoded',
-		'Content-length': 0, 
-		'Ocp-Apim-Subscription-Key': key
+			 'Content-length': 0, 
+			 'Ocp-Apim-Subscription-Key': key
       }
   }, function(err, resp, body) {
     if(err) return callback(err);
     try {
       var accessToken = body
-	  callback(null, accessToken);
+	  	callback(null, accessToken);
     } catch(e) {
       callback(e);
     }
   });
 }
 
-var writeWavHeader = function(outStream) {
+var writeWavHeader = function() {
+	outStream = fs.createWriteStream(audioFileName);
+
 	var b = new Buffer(1024);
 	b.write('RIFF', 0);
 	/* file length */
-	b.writeUInt32LE(32 + samplesLength * 2, 4);
+	b.writeUInt32LE(32 + samplesLength * numChannels, 4);
 	//b.writeUint32LE(0, 4);
 
 	b.write('WAVE', 8);
+
 	/* format chunk identifier */
 	b.write('fmt ', 12);
 
@@ -113,13 +124,15 @@ var writeWavHeader = function(outStream) {
 	b.writeUInt32LE(sampleRate, 24);
 
 	/* byte rate (sample rate * block align) */
-	b.writeUInt32LE(sampleRate * 2, 28);
+	b.writeUInt32LE(sampleRate * 1, 28);
+	//b.writeUInt32LE(sampleRate * 2, 28);
 
 	/* block align (channel count * bytes per sample) */
-	b.writeUInt16LE(2, 32);
+	b.writeUInt16LE(numChannels * 1, 32);
+	//b.writeUInt16LE(2, 32);
 
 	/* bits per sample */
-	b.writeUInt16LE(16, 34);
+	b.writeUInt16LE(bitsPerSample, 34);
 
 	/* data chunk identifier */
 	b.write('data', 36);
@@ -130,7 +143,19 @@ var writeWavHeader = function(outStream) {
 
 
 	outStream.write(b.slice(0, 50));
+
+	recordingStart = Date.now();
+
+	isRecording = true;
 };
+
+var isRecordingDone = function(data) {
+		recordingLength = Date.now() - recordingStart;
+		var val = (parseInt(data.slice(data.length - endPacketSize, data.length).toString("hex")) === 0 && recordingLength > 20);
+
+		isRecording = !val;
+		return val;
+}
 
 var speechToText = function (filename, accessToken, callback) {
   fs.readFile(filename, function(err, waveData) {
@@ -138,7 +163,7 @@ var speechToText = function (filename, accessToken, callback) {
     request.post({
       url: 'https://speech.platform.bing.com/recognize',
       qs: {
-        'scenarios': 'smd',
+        'scenarios': 'ulm',
         'appid': 'D4D52672-91D7-4C74-8AD8-42B1D98141A5', // This magic value is required
         'locale': 'en-US',
         'device.os': 'wp7',
@@ -150,7 +175,7 @@ var speechToText = function (filename, accessToken, callback) {
       body: waveData,
       headers: {
         'Authorization': 'Bearer ' + accessToken,
-        'Content-Type': 'audio/wav; samplerate=8000',
+        'Content-Type': 'audio/wav; samplerate='+sampleRate + '; sourcerate='+sampleRate,
         'Content-Length' : waveData.length
       }
     }, function(err, resp, body) {
@@ -163,5 +188,3 @@ var speechToText = function (filename, accessToken, callback) {
     });
   });
 }
-
-
