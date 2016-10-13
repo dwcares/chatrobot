@@ -72,7 +72,7 @@ var recognizeRecording = function() {
 				}
 				else if (body.header.status === 'success') {
 					particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'recognized', argument: body.header.name, auth: particleLoginToken });
-					console.log(body.header.name);
+					console.log("Recognized text: " + body.header.name);
 					textToSpeech(body.header.name, audioSynthFilename, token, function(err) {
 						if(err) console.log(err);
 						else console.log("Wrote audio: " + audioSynthFilename)
