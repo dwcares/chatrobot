@@ -13,7 +13,8 @@ var sampleRate = 16000;
 var endPacketSize = 100;
 var bitsPerSample = 8;
 var numChannels = 1;
-var audioFileName = "recording.wav";
+var audioRecordingFilename = "recording.wav";
+var audioSynthFilename = "synth.wav";
 var isRecording = false;
 
 var recordingStart = 0;
@@ -22,6 +23,7 @@ var recordingLength = 0;
 var outStream;
 
 net.createServer(function(sock) {
+
 	console.log('CONNECTED: ' + sock.remoteAddress +':'+ sock.remotePort);
 
 	particle.login({username: process.env.PARTICLE_USERNAME, password: process.env.PARTICLE_PASSWORD}).then(
@@ -33,7 +35,7 @@ net.createServer(function(sock) {
 
 	sock.on('data', function(data) {
 		if (!isRecording) 
-			writeWavHeader();
+			writeWavHeader(audioRecordingFilename);
 
 		try {			
 			// DEBUG
@@ -64,15 +66,19 @@ console.log('Waiting for TCP client connection on port: ' + port);
 var recognizeRecording = function() {
 		getAccessToken(process.env.MICROSOFT_SPEECH_API_KEY, function(err, token) {
 			console.log('Got speech access token');
-			speechToText(audioFileName, token, function(err, body) {
+			speechToText(audioRecordingFilename, token, function(err, body) {
 				if(err) {
 					console.log(err);
 				}
 				else if (body.header.status === 'success') {
 					particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'recognized', argument: body.header.name, auth: particleLoginToken });
 					console.log(body.header.name);
+					textToSpeech(body.header.name, audioSynthFilename, token, function(err) {
+						if(err) console.log(err);
+						else console.log("Wrote audio: " + audioSynthFilename)
+					});
 				} else {
-					console.log(body.header);
+						console.log(body.header);
 				};
 			});
 		});
@@ -97,8 +103,8 @@ var getAccessToken = function(key, callback) {
   });
 }
 
-var writeWavHeader = function() {
-	outStream = fs.createWriteStream(audioFileName);
+var writeWavHeader = function(audioFilename) {
+	outStream = fs.createWriteStream(audioFilename);
 
 	var b = new Buffer(1024);
 	b.write('RIFF', 0);
@@ -155,6 +161,29 @@ var isRecordingDone = function(data) {
 
 		isRecording = !val;
 		return val;
+}
+
+var textToSpeech = function (text, filename, accessToken, callback) {
+  var ssmlPayload = "<speak version='1.0' xml:lang='en-us'><voice xml:lang='en-US' xml:gender='Male' name='Microsoft Server Speech Text to Speech Voice (en-US, BenjaminRUS)'>" + text + "</voice></speak>";
+  request.post({
+    url: 'https://speech.platform.bing.com/synthesize',
+    body: ssmlPayload,
+    encoding: null,
+    headers: {
+      'Authorization': 'Bearer ' + accessToken,
+      'Content-Type' : 'application/ssml+xml',
+      'X-Microsoft-OutputFormat' : 'riff-16khz-16bit-mono-pcm',
+      'X-Search-AppId': '68AE0F3ADB0C427B935F34E68C579FBE',
+      'X-Search-ClientID': '68AE0F3ADB0C427B935F34E68C579FBE',
+			'User-Agent': 'Chat Robot'
+    }
+  }, function(err, resp, body) {
+    if(err) return callback(err);
+    fs.writeFile(filename, body, 'binary', function (err) {
+      if (err) return callback(err);
+      callback(null);
+    });
+  });
 }
 
 var speechToText = function (filename, accessToken, callback) {
