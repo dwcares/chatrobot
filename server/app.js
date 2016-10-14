@@ -2,62 +2,47 @@ var net = require('net');
 var request = require('request');
 var uuid = require('node-uuid');
 var Particle = require('particle-api-js');
+var fs = require("fs");
+
 var particle = new Particle();
 var particleLoginToken = "";
 
 var port = process.env.PORT || 3000;
 
-var fs = require("fs");
+var audioRecordingFilename = "recording.wav";
+var audioSynthFilename = "synth.wav";
+var isRecording = false;
+var recordingStart = 0;
+var recordingLength = 0;
 var samplesLength = 1000;
 var sampleRate = 16000;
 var endPacketSize = 100;
 var bitsPerSample = 8;
 var numChannels = 1;
-var audioRecordingFilename = "recording.wav";
-var audioSynthFilename = "synth.wav";
-var isRecording = false;
-var socket = null;
-
-var recordingStart = 0;
-var recordingLength = 0;
-
 var outStream;
 
 net.createServer(function(sock) {
-	socket = sock;
-
 	console.log('CONNECTED: ' + sock.remoteAddress +':'+ sock.remotePort);
-
-	particle.login({username: process.env.PARTICLE_USERNAME, password: process.env.PARTICLE_PASSWORD}).then(
-		function(data) {
-			particleLoginToken = data.body.access_token;
-	});
-
 	console.log("Ready for data");
 
-	sock.on('data', function(data) {
-		if (!isRecording) 
-			writeWavHeader(audioRecordingFilename);
+	loginToParticle(process.env.PARTICLE_USERNAME, process.env.PARTICLE_PASSWORD);
 
-		try {			
-			// DEBUG
-			// console.log("got chunk of " + data.toString('hex'));
+	sock.on('data', saveIncomingAudio.bind(this, function() {
+	
+		recognizeRecording(function(recognizedText, speechToken) {
 
-			if (isRecordingDone(data)) {
-				console.log();
-				console.log('Recorded for ' + recordingLength / 1000 + ' seconds');
-				outStream.end();
-				recognizeRecording();
-			} else {
-				process.stdout.write(".");
-				outStream.write(data);
-			}
-		} catch (ex) {
-			console.error("Er!" + ex);
-		}
-	});
+			// TODO: pipe to bot api, for now just echo
+			botResponseText = recognizedText;
 
-	// Add a 'close' event handler to this instance of socket
+			textToSpeech(botResponseText, audioSynthFilename, speechToken, function(err, data) {
+				if(!err) {
+
+					// TODO: stream this back to the device
+				}
+			});
+		});
+	}));
+
 	sock.on('close', function(data) {
 		console.log('CLOSED: ' + sock.remoteAddress +' '+ sock.remotePort);
 	});
@@ -65,44 +50,31 @@ net.createServer(function(sock) {
 }).listen(port);
 console.log('Waiting for TCP client connection on port: ' + port);
 
-var recognizeRecording = function() {
-		getAccessToken(process.env.MICROSOFT_SPEECH_API_KEY, function(err, token) {
-			console.log('Got speech access token');
-			speechToText(audioRecordingFilename, token, function(err, body) {
-				if(err) {
-					console.log(err);
-				}
-				else if (body.header.status === 'success') {
-					particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'recognized', argument: body.header.name, auth: particleLoginToken });
-					console.log("Recognized text: " + body.header.name);
-					textToSpeech(body.header.name, audioSynthFilename, token, function(err) {
-						if(err) console.log(err);
-						else console.log("Wrote audio: " + audioSynthFilename)
-					});
-				} else {
-						console.log(body.header);
-				};
-			});
-		});
+var loginToParticle = function(username, password) {
+		particle.login({username: username, password: password}).then(function(data) {
+			console.log('Logged into Particle Cloud')
+			particleLoginToken = data.body.access_token;
+	});
 }
 
-var getAccessToken = function(key, callback) {
-  request.post({
-    url: 'https://api.cognitive.microsoft.com/sts/v1.0/issueToken', 
-	headers: {
-       'Content-Type': 'application/x-www-form-urlencoded',
-			 'Content-length': 0, 
-			 'Ocp-Apim-Subscription-Key': key
-      }
-  }, function(err, resp, body) {
-    if(err) return callback(err);
-    try {
-      var accessToken = body
-	  	callback(null, accessToken);
-    } catch(e) {
-      callback(e);
-    }
-  });
+var saveIncomingAudio = function (callback, data) {
+		if (!isRecording) 
+			writeWavHeader(audioRecordingFilename);
+
+		try {			
+			if (isRecordingDone(data)) {
+				console.log();
+				console.log('Recorded for ' + recordingLength / 1000 + ' seconds');
+
+				outStream.end();
+				callback();
+			} else {
+				process.stdout.write(".");
+				outStream.write(data);
+			}
+		} catch (ex) {
+			console.error("Error saving incoming audio: " + ex);
+		}
 }
 
 var writeWavHeader = function(audioFilename) {
@@ -151,18 +123,51 @@ var writeWavHeader = function(audioFilename) {
 
 
 	outStream.write(b.slice(0, 50));
-
 	recordingStart = Date.now();
-
 	isRecording = true;
 };
 
 var isRecordingDone = function(data) {
 		recordingLength = Date.now() - recordingStart;
 		var val = (parseInt(data.slice(data.length - endPacketSize, data.length).toString("hex")) === 0 && recordingLength > 20);
-
 		isRecording = !val;
 		return val;
+}
+
+var recognizeRecording = function(callback) {
+		getAccessToken(process.env.MICROSOFT_SPEECH_API_KEY, function(err, token) {
+			console.log('Got speech access token');
+			speechToText(audioRecordingFilename, token, function(err, body) {
+				if(err) {
+					console.log("Speech to text error: " + err);
+				}
+				else if (body.header.status === 'success') {
+					 console.log("Recognized text: " + body.header.name);
+					 callback(body.header.name, token)
+				} else {
+						console.log("Speech to text error: " + body.header);
+				};
+			});
+		});
+}
+
+var getAccessToken = function(key, callback) {
+  request.post({
+    url: 'https://api.cognitive.microsoft.com/sts/v1.0/issueToken', 
+	headers: {
+       'Content-Type': 'application/x-www-form-urlencoded',
+			 'Content-length': 0, 
+			 'Ocp-Apim-Subscription-Key': key
+      }
+  }, function(err, resp, body) {
+    if(err) return callback(err);
+    try {
+      var accessToken = body
+	  	callback(null, accessToken);
+    } catch(e) {
+      callback(e);
+    }
+  });
 }
 
 var textToSpeech = function (text, filename, accessToken, callback) {
@@ -180,11 +185,19 @@ var textToSpeech = function (text, filename, accessToken, callback) {
 			'User-Agent': 'Chat Robot'
     }
   }, function(err, resp, body) {
-    if(err) return callback(err);
-		socket.write(body);
-    fs.writeFile(filename, body, 'binary', function (err) {
-      if (err) return callback(err);
-      callback(null);
+    if(err) { 
+			console.log('Text to Speech Error: ' + err);
+			return callback(err);
+		}
+
+		fs.writeFile(filename, body, 'binary', function (err) {
+      if (err) { 
+				console.log('Error writing audio: ' + err);
+				return callback(err);
+			}
+
+			console.log("Wrote audio file: " + audioSynthFilename);
+      callback(null, body);
     });
   });
 }
