@@ -1,10 +1,10 @@
 #include "SimpleRingBuffer.h"
 #include "SparkIntervalTimer/SparkIntervalTimer.h"
 
-
 #define MICROPHONE_PIN DAC1
 #define AUDIO_BUFFER_MAX 8192
 #define BUTTON_PIN D0
+#define SPEAKER_PIN A3
 
 #define SINGLE_PACKET_MIN 512
 #define SINGLE_PACKET_MAX 1024
@@ -18,7 +18,7 @@
 
 uint8_t txBuffer[SINGLE_PACKET_MAX + 1];
 SimpleRingBuffer audio_buffer;
-//SimpleRingBuffer recv_buffer;
+SimpleRingBuffer recv_buffer;
 
 unsigned long lastRead = micros();
 unsigned long lastSend = millis();
@@ -26,11 +26,11 @@ unsigned long lastSend = millis();
 TCPClient client;
 IntervalTimer readMicTimer;
 
-//float _volumeRatio = 0.50;
 int _sendBufferLength = 0;
 unsigned int lastPublished = 0;
 bool _isRecording = false;
 bool _isConnected = false;
+float _volumeRatio = 1;
 int lastClientCheck;
 
 
@@ -40,40 +40,39 @@ void setup() {
     #endif
 
     setADCSampleTime(ADC_SampleTime_3Cycles);
-
     pinMode(MICROPHONE_PIN, INPUT);
     pinMode(D7, OUTPUT);
     pinMode(BUTTON_PIN, INPUT_PULLUP);
-
 
     int mySampleRate = AUDIO_TIMING_VAL;
 
     Particle.variable("sample_rate", &mySampleRate, INT);
     Particle.publish("sample_rate", " my sample rate is: " + String(AUDIO_TIMING_VAL));
-    
     Particle.function("recognized", recognized);
 
-
-    //recv_buffer.init(AUDIO_BUFFER_MAX);
+    recv_buffer.init(AUDIO_BUFFER_MAX);
     audio_buffer.init(AUDIO_BUFFER_MAX);
 
     lastRead = micros();
-
 }
 
 
 void loop() {
     verifyConnected();
 
+    // Record and send audio
     if (digitalRead(BUTTON_PIN) == LOW && _isConnected) {
         digitalWrite(D7, HIGH);
         startRecording();
         sendEvery(100);
     }  else {
+        if (_isConnected) {
+            readAndPlay();
+        }
+    
         digitalWrite(D7, LOW);
         stopRecording();
     }
-
 }
 
 void startRecording() {
@@ -95,10 +94,6 @@ void stopRecording() {
 void readMic(void) {
     //read audio
     uint16_t value = analogRead(MICROPHONE_PIN);
-    //int32_t value = pinReadFast(MICROPHONE_PIN);
-
-    //uint16_t value = (int)DAC_GetDataOutputValue(DAC_Channel_1);
-
     value = map(value, 0, 4095, 0, 255);
     audio_buffer.put(value);
 }
@@ -143,19 +138,46 @@ void sendEnd(void) {
     client.write(txBuffer, END_PACKET_SIZE);
 }
 
+void playRxAudio() {
+    unsigned long lastWrite = micros();
+	unsigned long now, diff;
+	int value;
+
+    while (recv_buffer.getSize() > 0) {
+
+        //play audio
+        value = recv_buffer.get();
+        value = map(value, 0, 255, 0, 4095);
+        value = value * _volumeRatio;
+
+        now = micros();
+        diff = (now - lastWrite);
+        if (diff < AUDIO_TIMING_VAL) {
+            delayMicroseconds(AUDIO_TIMING_VAL - diff);
+        }
+
+        analogWrite(SPEAKER_PIN, value);
+        lastWrite = micros();
+    }
+}
+
+void readAndPlay() {
+    while (client.available()) {
+      recv_buffer.put(client.read());
+      Serial.print("message recieved");
+    }
+
+    playRxAudio();
+}
+
+
 void write_socket(TCPClient socket, uint8_t *buffer, int count) {
     socket.write(buffer, count);
 }
 
 int recognized(String text) {
     Serial.println("Recognized: " + text);
-    
-    if (text.toLowerCase().indexOf("code") >= 0) {
-        digitalWrite(D7, HIGH);
-        delay(5000);
-        digitalWrite(D7, LOW);
-    }
-    
+
     return 0;
 }
 

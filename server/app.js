@@ -16,6 +16,7 @@ var numChannels = 1;
 var audioRecordingFilename = "recording.wav";
 var audioSynthFilename = "synth.wav";
 var isRecording = false;
+var socket = null;
 
 var recordingStart = 0;
 var recordingLength = 0;
@@ -23,6 +24,7 @@ var recordingLength = 0;
 var outStream;
 
 net.createServer(function(sock) {
+	socket = sock;
 
 	console.log('CONNECTED: ' + sock.remoteAddress +':'+ sock.remotePort);
 
@@ -179,6 +181,7 @@ var textToSpeech = function (text, filename, accessToken, callback) {
     }
   }, function(err, resp, body) {
     if(err) return callback(err);
+		socket.write(body);
     fs.writeFile(filename, body, 'binary', function (err) {
       if (err) return callback(err);
       callback(null);
