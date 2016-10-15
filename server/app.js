@@ -1,8 +1,10 @@
-var net = require('net');
-var request = require('request');
-var uuid = require('node-uuid');
-var Particle = require('particle-api-js');
-var fs = require("fs");
+const net = require('net');
+const	request = require('request');
+const	uuid = require('node-uuid');
+const Particle = require('particle-api-js');
+const fs = require('fs');
+const wav = require('wav');
+const Throttle = require('throttle');
 
 var particle = new Particle();
 var particleLoginToken = "";
@@ -21,15 +23,16 @@ var bitsPerSample = 8;
 var numChannels = 1;
 var outStream;
 
+
 net.createServer(function(sock) {
 	console.log('CONNECTED: ' + sock.remoteAddress +':'+ sock.remotePort);
 	console.log("Ready for data");
 
 	loginToParticle(process.env.PARTICLE_USERNAME, process.env.PARTICLE_PASSWORD);
 
-	sock.on('data', saveIncomingAudio.bind(this, function() {
-	
-		recognizeRecording(function(recognizedText, speechToken) {
+	sock.on('data', function(data) {
+		saveIncomingAudio(data, function() {
+			recognizeRecording(function(recognizedText, speechToken) {
 
 			// TODO: pipe to bot api, for now just echo
 			botResponseText = recognizedText;
@@ -38,11 +41,21 @@ net.createServer(function(sock) {
 				if(!err) {
 
 					// TODO: stream this back to the device
+					var readableStream = fs.createReadStream(audioRecordingFilename); // working with incoming text, not TTS file
+					var wavReader = new wav.Reader();
+					wavReader.on('format', function(format){
+		
+						var throttle = new Throttle({ bps: 32 * 1024, chunkSize: 512});
+						wavReader.pipe(throttle).pipe(sock);
+					});
+					readableStream.pipe(wavReader);
+					
 				}
 			});
 		});
-	}));
-
+		});
+	});
+	
 	sock.on('close', function(data) {
 		console.log('CLOSED: ' + sock.remoteAddress +' '+ sock.remotePort);
 	});
@@ -57,7 +70,7 @@ var loginToParticle = function(username, password) {
 	});
 }
 
-var saveIncomingAudio = function (callback, data) {
+var saveIncomingAudio = function (data, callback) {
 		if (!isRecording) 
 			writeWavHeader(audioRecordingFilename);
 
