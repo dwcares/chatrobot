@@ -41,7 +41,7 @@ net.createServer(function(sock) {
 				if(!err) {
 
 					// TODO: stream this back to the device
-					var readableStream = fs.createReadStream(audioRecordingFilename); // working with incoming text, not TTS file
+					var readableStream = fs.createReadStream(audioRecordingFilename); // working with incoming text, not TTS file (downsample?)
 					var wavReader = new wav.Reader();
 					wavReader.on('format', function(format){
 		
