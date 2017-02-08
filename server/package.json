@@ -13,6 +13,7 @@
     "particle-api-js": "^6.0.7",
     "request": "^2.75.0",
     "throttle": "^1.0.3",
-    "wav": "^1.0.1"
+    "wav": "^1.0.1",
+    "wav-encoder": "^1.1.0"
   }
 }

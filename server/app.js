@@ -4,6 +4,7 @@ const	uuid = require('node-uuid');
 const Particle = require('particle-api-js');
 const fs = require('fs');
 const wav = require('wav');
+const WavEncoder = require("wav-encoder");
 const Throttle = require('throttle');
 
 var particle = new Particle();
@@ -27,8 +28,8 @@ var outStream;
 net.createServer(function(sock) {
 	console.log('CONNECTED: ' + sock.remoteAddress +':'+ sock.remotePort);
 	console.log("Ready for data");
-
-	loginToParticle(process.env.PARTICLE_USERNAME, process.env.PARTICLE_PASSWORD);
+	
+	loginToParticle(process.env.PARTICLE_USERNAME, process.env.PARTICLE_PASSWORD);					
 
 	sock.on('data', function(data) {
 		saveIncomingAudio(data, function() {
@@ -39,17 +40,17 @@ net.createServer(function(sock) {
 
 			textToSpeech(botResponseText, audioSynthFilename, speechToken, function(err, data) {
 				if(!err) {
-
+					
+					// particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'recognized', argument: botResponseText, auth: particleLoginToken }).then(function(res) {
+					// 	console.log("res");
+					// }, function(er) {
+					// 	console.log(er);
+					// });
+					
 					// TODO: stream this back to the device
 					var readableStream = fs.createReadStream(audioRecordingFilename); // working with incoming text, not TTS file (downsample?)
-					var wavReader = new wav.Reader();
-					wavReader.on('format', function(format){
-		
-						var throttle = new Throttle({ bps: 32 * 1024, chunkSize: 512});
-						wavReader.pipe(throttle).pipe(sock);
-					});
-					readableStream.pipe(wavReader);
-					
+					var throttle = new Throttle({ bps: 16 * 1024, chunkSize: 1024});
+					readableStream.pipe(throttle).pipe(sock);
 				}
 			});
 		});
@@ -76,6 +77,7 @@ var saveIncomingAudio = function (data, callback) {
 
 		try {			
 			if (isRecordingDone(data)) {
+				isRecording = false;
 				console.log();
 				console.log('Recorded for ' + recordingLength / 1000 + ' seconds');
 
@@ -83,13 +85,15 @@ var saveIncomingAudio = function (data, callback) {
 				callback();
 			} else {
 				process.stdout.write(".");
+				//\process.stdout.write(data);
+
 				outStream.write(data);
 			}
 		} catch (ex) {
 			console.error("Error saving incoming audio: " + ex);
 		}
 }
-
+ 
 var writeWavHeader = function(audioFilename) {
 	outStream = fs.createWriteStream(audioFilename);
 
@@ -142,9 +146,7 @@ var writeWavHeader = function(audioFilename) {
 
 var isRecordingDone = function(data) {
 		recordingLength = Date.now() - recordingStart;
-		var val = (parseInt(data.slice(data.length - endPacketSize, data.length).toString("hex")) === 0 && recordingLength > 20);
-		isRecording = !val;
-		return val;
+		return (data.slice(data.length - endPacketSize, data.length).readUInt8(0) == 0);
 }
 
 var recognizeRecording = function(callback) {
@@ -192,7 +194,8 @@ var textToSpeech = function (text, filename, accessToken, callback) {
     headers: {
       'Authorization': 'Bearer ' + accessToken,
       'Content-Type' : 'application/ssml+xml',
-      'X-Microsoft-OutputFormat' : 'riff-16khz-16bit-mono-pcm',
+      // 'X-Microsoft-OutputFormat' : 'riff-8khz-8bit-mono-mulaw', uses mulaw encoding format
+			'X-Microsoft-OutputFormat' : 'raw-16khz-16bit-mono-pcm',
       'X-Search-AppId': '68AE0F3ADB0C427B935F34E68C579FBE',
       'X-Search-ClientID': '68AE0F3ADB0C427B935F34E68C579FBE',
 			'User-Agent': 'Chat Robot'
@@ -246,3 +249,34 @@ var speechToText = function (filename, accessToken, callback) {
     });
   });
 }
+
+
+					// const whiteNoise1sec = {
+					// 	sampleRate: 44100,
+					// 	channelData: [
+					// 		new Float32Array(44100).map(() => Math.random() - 0.5),
+					// 		new Float32Array(44100).map(() => Math.random() - 0.5)
+					// 	]
+					// };
+
+					// 	WavEncoder.encode(data).then((buffer) => {
+					// 		fs.writeFileSync("noise.wav", new Buffer(buffer));
+					// 	});
+		
+
+					// // TODO: stream this back to the device
+					// var readableStream = fs.createReadStream(audioRecordingFilename); // working with incoming text, not TTS file (downsample?)
+					// var wavReader = new wav.Reader();
+					// wavReader.on('format', function(format){
+					// 	console.log(format);
+	
+					// });
+					// readableStream.pipe(wavReader);
+
+					// var readableStream2 = fs.createReadStream(audioSynthFilename); // working with incoming text, not TTS file (downsample?)
+					// 				var wavReader2 = new wav.Reader();
+					// wavReader2.on('format', function(format){
+					// 	console.log(format);
+	
+					// });
+					// readableStream2.pipe(wavReader2);
