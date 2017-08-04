@@ -2,3 +2,4 @@ node_modules
 .vscode
 recording.wav
 synth.wav
+package-lock.json

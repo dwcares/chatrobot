@@ -3,9 +3,9 @@ const	request = require('request');
 const	uuid = require('node-uuid');
 const Particle = require('particle-api-js');
 const fs = require('fs');
-const wav = require('wav');
-const WavEncoder = require("wav-encoder");
 const Throttle = require('throttle');
+
+var PcmFormatTransform = require('pcm-format');
 
 var particle = new Particle();
 var particleLoginToken = "";
@@ -35,7 +35,7 @@ net.createServer(function(sock) {
 		saveIncomingAudio(data, function() {
 			recognizeRecording(function(recognizedText, speechToken) {
 
-			// TODO: pipe to bot api, for now just echo
+			// TODO: pipe to LUIS api, for now just echo
 			botResponseText = recognizedText;
 
 			textToSpeech(botResponseText, audioSynthFilename, speechToken, function(err, data) {
@@ -47,10 +47,14 @@ net.createServer(function(sock) {
 					// 	console.log(er);
 					// });
 					
-					// TODO: stream this back to the device
-					var readableStream = fs.createReadStream(audioRecordingFilename); // working with incoming text, not TTS file (downsample?)
+					var readableStream = fs.createReadStream(audioSynthFilename); 
+
+				  var pcmTransform  = new PcmFormatTransform(
+						{ bitDepth: 16, signed: true}, 
+						{ bitDepth: 8, signed: false });
+
 					var throttle = new Throttle({ bps: 16 * 1024, chunkSize: 1024});
-					readableStream.pipe(throttle).pipe(sock);
+					readableStream.pipe(pcmTransform).pipe(throttle).pipe(sock);
 				}
 			});
 		});
@@ -194,7 +198,6 @@ var textToSpeech = function (text, filename, accessToken, callback) {
     headers: {
       'Authorization': 'Bearer ' + accessToken,
       'Content-Type' : 'application/ssml+xml',
-      // 'X-Microsoft-OutputFormat' : 'riff-8khz-8bit-mono-mulaw', uses mulaw encoding format
 			'X-Microsoft-OutputFormat' : 'raw-16khz-16bit-mono-pcm',
       'X-Search-AppId': '68AE0F3ADB0C427B935F34E68C579FBE',
       'X-Search-ClientID': '68AE0F3ADB0C427B935F34E68C579FBE',
