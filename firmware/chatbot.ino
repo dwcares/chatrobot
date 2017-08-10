@@ -17,7 +17,7 @@
 #define SINGLE_PACKET_MAX 1024
 #define END_PACKET_SIZE 100
 
-#define SERVER_HOST  "192.168.2.64"
+#define SERVER_HOST  "10.12.78.244"
 #define SERVER_PORT 3000
 
 #define AUDIO_TIMING_VAL 62 /* 16kHz */
@@ -33,6 +33,8 @@
 #define BUTTON_PIN D0
 #define SPEAKER_PIN A3
 
+#define TONE_PIN WKP
+
 #define PING_SENSOR_DELAY_MS 10
 
 uint8_t txBuffer[SINGLE_PACKET_MAX + 1];
@@ -40,6 +42,7 @@ SimpleRingBuffer audio_buffer;
 SimpleRingBuffer recv_buffer;
 
 unsigned long lastSend = millis();
+unsigned long lastProcess = millis();
 
 bool eyesBusy = false;
 unsigned int eyesVal = 0;
@@ -60,7 +63,6 @@ float _volumeRatio = VOLUME;
 int lastClientCheck;
 
 Debounce debouncer = Debounce(); 
-Debounce longPressDebouncer = Debounce();
 bool sensorInit = false;
 
 unsigned long lastDriveUpdateTime = millis();
@@ -89,9 +91,6 @@ void setup() {
     
     debouncer.attach(BUTTON_PIN, INPUT_PULLUP);
     debouncer.interval(20);
-    
-    longPressDebouncer.attach(BUTTON_PIN, INPUT_PULLUP);
-    longPressDebouncer.interval(5000);
     
     checkWifiConfig();
 }
@@ -123,7 +122,9 @@ void updateRecordAndPlay() {
 }
 
 void checkWifiConfig() {
-    if (digitalRead(BUTTON_PIN) == LOW ) {
+    debouncer.update();
+
+    if (debouncer.read() == LOW ) {
         digitalWrite(EYES_LED, HIGH);
         WiFi.listen();
     }
@@ -318,6 +319,8 @@ void playRxAudio() {
 	
 
     int value = 0;
+    
+    lastProcess = millis();
 
 
     while (recv_buffer.getSize() > 0) {
@@ -325,17 +328,19 @@ void playRxAudio() {
 
         //play audio
         value = recv_buffer.get();
-        value = map(value, 0,  255, 0, 4095); // wha it should be, but quiet?
+        //value*=20;
+        value = map(value, 0,  255, 0, 4095);
 
         now = micros();
         diff = (now - lastWrite);
         if (diff < PLAYBACK_TIMING_VAL) {
             delayMicroseconds(PLAYBACK_TIMING_VAL - diff);
         }
-
+        
         analogWrite(SPEAKER_PIN, value);
         lastWrite = micros();
     }
+    
 
 
     _isPlayback = false;

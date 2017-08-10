@@ -9,10 +9,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "node-uuid": "^1.4.7",
+    "npm-openweathermap": "0.0.1",
     "particle-api-js": "^6.0.7",
     "pcm-format": "^1.1.2",
     "request": "^2.75.0",
-    "throttle": "^1.0.3"
+    "throttle": "^1.0.3",
+    "uuid": "^3.1.0"
   }
 }
