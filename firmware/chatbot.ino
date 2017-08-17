@@ -17,12 +17,8 @@
 #define SINGLE_PACKET_MAX 1024
 #define END_PACKET_SIZE 100
 
-#define SERVER_HOST  "10.12.78.244"
-#define SERVER_PORT 3000
-
 #define AUDIO_TIMING_VAL 62 /* 16kHz */
 #define PLAYBACK_TIMING_VAL 62
-// #define PLAYBACK_TIMING_VAL 124 /* for 8khz */
 
 #define VOLUME 0.06
 
@@ -37,16 +33,23 @@
 
 #define PING_SENSOR_DELAY_MS 10
 
+SYSTEM_MODE(SEMI_AUTOMATIC);
+SYSTEM_THREAD(ENABLED);
+
+String serverHost =  "192.168.1.1";
+int serverPort = 80;
+
+
 uint8_t txBuffer[SINGLE_PACKET_MAX + 1];
 SimpleRingBuffer audio_buffer;
 SimpleRingBuffer recv_buffer;
 
 unsigned long lastSend = millis();
-unsigned long lastProcess = millis();
 
 bool eyesBusy = false;
 unsigned int eyesVal = 0;
 int eyesDir = 1;
+unsigned int eyeMax = 200;
 
 TCPClient client;
 IntervalTimer readMicTimer;
@@ -75,7 +78,8 @@ void setup() {
 
     Particle.function("drive", drive);
     Particle.function("stop", stop);
-    
+    Particle.function("updateServer", updateServer);
+
     pinMode(MICROPHONE_PIN, INPUT);
     pinMode(SPEAKER_PIN, OUTPUT);
     pinMode(EYES_LED, OUTPUT);
@@ -91,6 +95,7 @@ void setup() {
     
     debouncer.attach(BUTTON_PIN, INPUT_PULLUP);
     debouncer.interval(20);
+    
     
     checkWifiConfig();
 }
@@ -116,6 +121,7 @@ void updateRecordAndPlay() {
         stopRecording();
         
         if (_isConnected) {
+            eyeMax = 1500;
             readAndPlay();
         }
     }
@@ -126,7 +132,14 @@ void checkWifiConfig() {
 
     if (debouncer.read() == LOW ) {
         digitalWrite(EYES_LED, HIGH);
+        WiFi.on();
         WiFi.listen();
+    } else {
+        Particle.connect();
+        eyeMax = 800;
+        
+        // loadStateFromEEPROM();
+
     }
 }
 
@@ -142,6 +155,51 @@ int recognized(String text) {
     // }
 
     return 0;
+}
+
+int updateServer(String server) {
+    Serial.println("server: " + server);
+    int splitIndex = server.indexOf(":");
+        Serial.println("index: " + splitIndex);
+
+    String host = "";
+    String port = "";
+    
+    if (splitIndex >= 0) {
+        host = server.substring(0, splitIndex);
+        port = server.substring(splitIndex + 1);
+    } else {
+        host = server;
+        port = "80";
+    }
+    
+    serverHost = host;
+    serverPort = port.toInt();
+    
+    //saveStateToEEPROM();
+   return 0;
+}
+
+void loadStateFromEEPROM () {
+     
+    EEPROM.get(0, serverPort);
+    if(serverPort == 0) {
+      serverPort = 80;
+    }
+    
+    EEPROM.get(40, serverHost);
+    if(serverHost == "") {
+      serverHost = "192.168.1.99";
+    }
+    
+    Serial.println("State loaded from EEPROM: " + serverHost + ":" + serverPort);
+}
+
+void saveStateToEEPROM () {
+    EEPROM.put(0, serverPort);
+    EEPROM.put(40, serverHost);
+    
+    Serial.println("State saved to EEPROM: " + serverHost + ":" + serverPort);
 }
 
 ////////////////// MOTORS AND EYES //////////////////
@@ -207,7 +265,7 @@ void updateEyes() {
     if (_isRecording || _isPlayback || _isDriving) {
         digitalWrite(EYES_LED, HIGH);
     } else {
-        if (eyesVal > 1500) {
+        if (eyesVal > eyeMax) {
             eyesDir = -1;
         } 
         
@@ -319,9 +377,6 @@ void playRxAudio() {
 	
 
     int value = 0;
-    
-    lastProcess = millis();
-
 
     while (recv_buffer.getSize() > 0) {
         _isPlayback = true;
@@ -393,14 +448,14 @@ bool verifyConnected() {
     if (_isDriving) return false;
     
     unsigned int now = millis();
-    if ((now - lastClientCheck) > 100) {
+    if ((now - lastClientCheck) > 2000) {
         lastClientCheck = now;
 
         if (client.connected()) {
             _isConnected = true;
         }
         else {
-            _isConnected = client.connect(SERVER_HOST, SERVER_PORT);
+            _isConnected = client.connect(serverHost, serverPort);
         }
     }
     

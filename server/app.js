@@ -7,19 +7,19 @@ const Throttle = require('throttle');
 const PcmFormatTransform = require('pcm-format');
 const LUISClient = require("./luis_sdk");
 const Weather = require('npm-openweathermap');
-
+const os = require('os');
 
 var particle = new Particle();
 var particleLoginToken = "";
 
 Weather.api_key = process.env.WEATHER_KEY;
 Weather.temp = 'k';
-
 var port = process.env.PORT || 3000;
+var connected = false;
 
-var songFilename = "/audio/song.wav";
-var audioRecordingFilename = "/audio/recording.wav";
-var audioSynthFilename = "/audio/synth.wav";
+var songFilename = "./audio/song.wav";
+var audioRecordingFilename = "./audio/recording.wav";
+var audioSynthFilename = "./audio/synth.wav";
 var isRecording = false;
 
 var recordingStart = 0;
@@ -40,8 +40,13 @@ var luis = LUISClient({
 net.createServer(function (sock) {
 	console.log('CONNECTED: ' + sock.remoteAddress + ':' + sock.remotePort);
 	console.log("Ready for data");
+	connected = true;
 
-	loginToParticle(process.env.PARTICLE_USERNAME, process.env.PARTICLE_PASSWORD);
+	try {
+		sock.setKeepAlive(true, 30000);
+	} catch (exception) {
+		console.log('exception', exception);
+	}
 
 	sock.on('data', function (data) {
 		saveIncomingAudio(data, function () {
@@ -67,14 +72,17 @@ net.createServer(function (sock) {
 
 	sock.on('error', function (err) {
 		console.log('ERROR: ' + err + ' at ' + sock.address + ' ' + sock.remotePort);
+		connected = false;
 	});
 
 	sock.on('end', function (data) {
 		console.log('END: ' + sock.remoteAddress + ' ' + sock.remotePort);
+		connected = false;
 	});
 
 	sock.on('close', function (data) {
 		console.log('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
+		connected = false;
 	});
 
 	var streamAudioOut = function (readableStream, callback) {
@@ -83,7 +91,7 @@ net.createServer(function (sock) {
 			{ bitDepth: 16, signed: true },
 			{ bitDepth: 8, signed: false });
 
-		var throttle = new Throttle({ bps: 32 * 1024, chunkSize: 1024 });
+		var throttle = new Throttle({ bps: 32 * 1040, chunkSize: 64 });
 
 		readableStream.pipe(throttle).pipe(pcmTransform).pipe(sock, { end: false });
 
@@ -96,12 +104,44 @@ net.createServer(function (sock) {
 }).listen(port);
 console.log('Waiting for TCP client connection on port: ' + port);
 
-var loginToParticle = function (username, password) {
-	particle.login({ username: username, password: password }).then(function (data) {
+var loginToParticle = function () { // Note: self executing
+	particle.login({ username: process.env.PARTICLE_USERNAME, password: process.env.PARTICLE_PASSWORD }).then(function (data) {
 		console.log('Logged into Particle Cloud')
 		particleLoginToken = data.body.access_token;
+
+		setTimeout(updateServer, 3000); // if it doesn't connect in 3 seconds give it the latest IP
 	});
+}.call(this)
+
+var updateServer = function () {
+	if (!connected) {
+		particle.getDevice({ deviceId: process.env.PARTICLE_DEVICE_ID, auth: particleLoginToken }).then(function (deviceInfo) {
+			if (!deviceInfo.body.connected || connected) return;
+			host = getWifiAddress();
+			particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'updateServer', argument: host + ":" + port, auth: particleLoginToken }).then(function (hostData) {
+				console.log('Particle: Updated server: ' + host + ":" + port);
+
+			}, function (err) { console.log("Particle 'updateServer': " + err) });
+		}, function (err) { });
+	}
 }
+
+function getWifiAddress() {
+	var result;
+	var ifaces = os.networkInterfaces();
+	ifaces["Wi-Fi"].forEach(function (iface) {
+		if ('IPv4' !== iface.family || iface.internal !== false) {
+			// skip over internal (i.e. 127.0.0.1) and non-ipv4 addresses
+			return;
+		}
+
+		result = iface.address;
+	});
+
+	return result;
+}
+
+
 
 var saveIncomingAudio = function (data, callback) {
 	if (!isRecording)
@@ -228,7 +268,7 @@ var lookupAndRespond = function (intent, respond) {
 
 		case "Greeting.HowAreYou":
 			respond("Hi, I'm doing great!");
-		break;
+			break;
 
 		case "Name":
 			respond("My name is Chat Bot.");
@@ -248,9 +288,12 @@ var lookupAndRespond = function (intent, respond) {
 		case "Song":
 			respond("I'd love to sing you a song!")
 			break;
+		case "Laws": 
+			respond("A robot may not injure a human being, or, through inaction, allow a human being to come to harm.");
+			break;
 		case "None":
 		default:
-			respond("Sorry?");
+			respond("Sorry Dave, I can't do that");
 			break;
 
 	}
@@ -261,11 +304,11 @@ var getWeatherToday = function (callback) {
 
 	Weather.current_weather()
 		.then(function (result) {
-				var currentWeather = "It's "+ result.weather[0].description + " and the current temp is " + parseInt(1.8 * (result.main.temp - 273) + 32) + "degrees!";
+			var currentWeather = "It's " + result.weather[0].description + " and the current temp is " + parseInt(1.8 * (result.main.temp - 273) + 32) + "degrees!";
 
 			callback(currentWeather);
 		}, function (error) {
-			 callback("Sorry, I couldn't get the weather");
+			callback("Sorry, I couldn't get the weather");
 		});
 
 }
@@ -318,4 +361,3 @@ var speechToText = function (filename, accessToken, callback) {
 }
 
 
-			
