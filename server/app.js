@@ -291,6 +291,9 @@ var lookupAndRespond = function (intent, respond) {
 		case "Laws": 
 			respond("A robot may not injure a human being, or, through inaction, allow a human being to come to harm.");
 			break;
+		case "Birthday": 
+			respond("I was born November 7th, 1985 in Katsushika Tokyo.");
+			break;
 		case "None":
 		default:
 			respond("Sorry Dave, I can't do that");
