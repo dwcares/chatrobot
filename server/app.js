@@ -42,6 +42,8 @@ net.createServer(function (sock) {
 	console.log("Ready for data");
 	connected = true;
 
+	
+
 	try {
 		sock.setKeepAlive(true, 30000);
 	} catch (exception) {
@@ -51,23 +53,26 @@ net.createServer(function (sock) {
 	sock.on('data', function (data) {
 		saveIncomingAudio(data, function () {
 			recognizeRecording(function (recognizedText, speechToken) {
-				aiPredict(recognizedText, function (botResponseText) {
+				aiPredict(recognizedText, function (botResponseText, afterBotResponseCallback) {
 					textToSpeech(botResponseText, audioSynthFilename, speechToken, function (err, data) {
-						if (!err) {
-							var audioSynthStream = fs.createReadStream(audioSynthFilename);
+					if (!err) {
+					var audioSynthStream = fs.createReadStream(audioSynthFilename);
 
-							streamAudioOut(audioSynthStream, function () {
+					streamAudioOut(audioSynthStream, function streamEnded() {
 
-								if (botResponseText.indexOf("song") >= 0) {
-									var songStream = fs.createReadStream(songFilename);
-									streamAudioOut(songStream);
-								}
-							});
+						if (botResponseText.indexOf("song") >= 0) {
+							var songStream = fs.createReadStream(songFilename);
+							streamAudioOut(songStream);
 						}
-					});
+						else {
+							if (afterBotResponseCallback) { afterBotResponseCallback(); }
+						}						
 				});
+				}
 			});
 		});
+	});
+	});
 	});
 
 	sock.on('error', function (err) {
@@ -91,15 +96,19 @@ net.createServer(function (sock) {
 			{ bitDepth: 16, signed: true },
 			{ bitDepth: 8, signed: false });
 
-		var throttle = new Throttle({ bps: 32 * 1040, chunkSize: 64 });
+		var throttle = new Throttle({ bps: 16 * 1024, chunkSize: 16 });
 
-		readableStream.pipe(throttle).pipe(pcmTransform).pipe(sock, { end: false });
+		var stream = readableStream.pipe(pcmTransform).pipe(throttle);
+		stream.pipe(sock, { end: false });
 
-		readableStream.on('end', function () {
+		stream.on('end', function () {
 			if (callback) { callback(); }
 		});
 
 	}
+
+	var songStream = fs.createReadStream("./audio/dialup.wav");
+	streamAudioOut(songStream);
 
 }).listen(port);
 console.log('Waiting for TCP client connection on port: ' + port);
@@ -153,7 +162,7 @@ var saveIncomingAudio = function (data, callback) {
 			console.log();
 			console.log('Recorded for ' + recordingLength / 1000 + ' seconds');
 
-			callback();
+			if (callback) { callback(); }
 		} else {
 			process.stdout.write(".");
 			outStream.write(data);
@@ -258,7 +267,7 @@ var textToSpeech = function (text, filename, accessToken, callback) {
 	});
 }
 
-var lookupAndRespond = function (intent, respond) {
+var lookupAndRespond = function (intent, respond, entities) {
 	var response = ""
 
 	switch (intent) {
@@ -285,6 +294,13 @@ var lookupAndRespond = function (intent, respond) {
 		case "Weather.GetForecast":
 			respond("The weather looks like it's going to be great!");
 			break;
+
+		case "Drive":
+			let distance = entities && entities[0] && entities[0].type === 'builtin.number' ? entities[0].resolution.value : 5;
+			respond("ok, Let's go!", function() {
+				drive(distance);				
+			});
+			break;
 		case "Song":
 			respond("I'd love to sing you a song!")
 			break;
@@ -303,6 +319,16 @@ var lookupAndRespond = function (intent, respond) {
 
 }
 
+var drive = function (seconds) {
+	// particle.getDevice({ deviceId: process.env.PARTICLE_DEVICE_ID, auth: particleLoginToken }).then(function (deviceInfo) {
+	// 	if (!deviceInfo.body.connected) return;
+		particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'drive', argument: ""+seconds, auth: particleLoginToken }).then(function (data) {
+			console.log('Particle: Started Driving for ' + seconds + ' seconds');
+
+		}, function (err) { console.log("Particle 'drive': " + err) });
+	// }, function (err) {console.log('particle connect ' + err)});
+}
+
 var getWeatherToday = function (callback) {
 
 	Weather.current_weather()
@@ -319,9 +345,10 @@ var getWeatherToday = function (callback) {
 var aiPredict = function (predictText, botRespond) {
 	luis.predict(predictText, {
 		onSuccess: function (response) {
-			console.log(response)
 
-			lookupAndRespond(response.topScoringIntent.intent, botRespond);
+			console.log(response);
+
+			lookupAndRespond(response.topScoringIntent.intent, botRespond, response.entities);
 		},
 		onFailure: function (err) {
 			console.error(err);

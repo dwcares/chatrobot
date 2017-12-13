@@ -1,13 +1,13 @@
-// This #include statement was automatically added by the Particle IDE.
 #include "SimpleRingBuffer.h"
 #include <SparkIntervalTimer.h>
 #include <Debounce.h>
 
-// #define SERIAL_DEBUG_ON true
+#define SERIAL_DEBUG_ON true
 
 #define MOTOR_REVERSE_PIN D1
 #define MOTOR_FORWARD_PIN D2
-#define DRIVE_DISTANCE_FREQ 1000
+#define DRIVE_UPDATE_FREQ 300
+#define PING_SENSOR_DELAY_MS 10
 
 #define TRIG_PIN D4
 #define ECHO_PIN D5
@@ -31,13 +31,12 @@
 
 #define TONE_PIN WKP
 
-#define PING_SENSOR_DELAY_MS 10
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 
 String serverHost =  "192.168.1.1";
-int serverPort = 80;
+int serverPort = 3000;
 
 
 uint8_t txBuffer[SINGLE_PACKET_MAX + 1];
@@ -68,8 +67,11 @@ int lastClientCheck;
 Debounce debouncer = Debounce(); 
 bool sensorInit = false;
 
-unsigned long lastDriveUpdateTime = millis();
+unsigned long lastUpdateDriveTime = millis();
 int currentDriveSpeed = 0;
+int currentDistance = 0;
+
+unsigned long driveUntilTime = millis();
 
 void setup() {
     #if SERIAL_DEBUG_ON
@@ -78,6 +80,8 @@ void setup() {
 
     Particle.function("drive", drive);
     Particle.function("stop", stop);
+    Particle.function("setMotor", setMotor);
+
     Particle.function("updateServer", updateServer);
 
     pinMode(MICROPHONE_PIN, INPUT);
@@ -96,15 +100,17 @@ void setup() {
     debouncer.attach(BUTTON_PIN, INPUT_PULLUP);
     debouncer.interval(20);
     
-    
     checkWifiConfig();
+    
+    playTone();
 }
 
 void loop() {
 
     updateRecordAndPlay();
     updateEyes();
-    //updateDriveDistance();
+    updateDriveDistance();
+    
 }
 
 /////////////// MAIN RECORD LOOP //////////////
@@ -202,58 +208,99 @@ void saveStateToEEPROM () {
     Serial.println("State saved to EEPROM: " + serverHost + ":" + serverPort);
 }
 
-////////////////// MOTORS AND EYES //////////////////
+////////////////// MOTORS AND EYES AND TONES //////////////////
+
+void updateDriveDistance() {
+    
+    if (_isDriving && millis() > driveUntilTime)  {
+        stop("");
+        return;
+    }
+    
+
+    if (_isDriving && millis() > lastUpdateDriveTime + DRIVE_UPDATE_FREQ) {
+        
+      
+        
+        uint32_t inchesRAW = measureInches(TRIG_PIN, ECHO_PIN, PING_SENSOR_DELAY_MS);
+
+ 
+        Serial.println(inchesRAW);
+
+        if (inchesRAW > 20) {
+            setMotorSpeed(180);
+
+        } else if (inchesRAW > 12 && currentDriveSpeed >= 0) {
+            setMotorSpeed(80);
+        } else if (inchesRAW > 12 && currentDriveSpeed < 0) {
+            setMotorSpeed(-100);
+        }
+        else  {
+            setMotorSpeed(-80);
+        }
+          
+        lastUpdateDriveTime = millis();
+    }
+
+}
+
+int playTone() {
+    
+    int melody[] = {1908,2551,2551,2273,2551,0,2024,1908}; //C4,G3,G3,A3,G3,0,B3,C4
+    int noteDurations[] = {4,8,8,4,4,4,4,4 };
+    for (int thisNote = 0; thisNote < 8; thisNote++) {
+
+        // to calculate the note duration, take one second
+        // divided by the note type.
+        //e.g. quarter note = 1000 / 4, eighth note = 1000/8, etc.
+        int noteDuration = 1000/noteDurations[thisNote];
+        tone(TONE_PIN, melody[thisNote],noteDuration);
+    
+        // to distinguish the notes, set a minimum time between them.
+        // the note's duration + 30% seems to work well:
+        int pauseBetweenNotes = noteDuration * 1.30;
+        delay(pauseBetweenNotes);
+        // stop the tone playing:
+        noTone(TONE_PIN);
+    }
+
+}
+
+int drive(String args) {
+    _isDriving = true;
+    driveUntilTime = args.toInt()*1000 + millis();
+    
+    return 1;
+}
+
+int stop(String args) {
+    _isDriving = false;
+
+    setMotorSpeed(0);
+    
+    playTone();
+
+    return 1;
+}
+
 
 int setMotor(String speed) {
     setMotorSpeed(speed.toInt());
     return 1;
 }
 
-void updateDriveDistance() {
-
-    if (_isDriving) {
-        uint32_t inches = measureInches(TRIG_PIN, ECHO_PIN, PING_SENSOR_DELAY_MS);
-        
-        Serial.println(inches);
-
-        if (inches > 30) {
-            setMotorSpeed(255);
-        }
-        else if (inches > 10) {
-            setMotorSpeed(120);
-        }  else {
-            setMotorSpeed(-100);
-        }
-        lastDriveUpdateTime = millis();
-    }
-}
-
-int drive(String speed) {
- 
-   setMotorSpeed(150);
-   return 1;
-}
-
-int stop(String args) {
-    setMotorSpeed(0);
-    return 1;
-}
-
 
 void setMotorSpeed(int speed) {
-    
+
     if (speed == currentDriveSpeed) return; 
     
     if (speed > 0) {
-        _isDriving = true;
         analogWrite(MOTOR_FORWARD_PIN, 255 - speed);
         digitalWrite(MOTOR_REVERSE_PIN, HIGH);
     } else if (speed < 0) {
-        _isDriving = true;
       analogWrite(MOTOR_REVERSE_PIN, 255 + speed);
       digitalWrite(MOTOR_FORWARD_PIN, HIGH);
     } else {
-        _isDriving = false;
         digitalWrite(MOTOR_FORWARD_PIN, HIGH);
         digitalWrite(MOTOR_REVERSE_PIN, HIGH);
     }
