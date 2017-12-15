@@ -1,3 +1,10 @@
+var express = require('express');
+var app = express();
+app.use(express.static('public'));
+
+var http = require('http').Server(app);
+var io = require('socket.io')(http);
+
 const net = require('net');
 const request = require('request');
 const uuid = require('uuid');
@@ -14,12 +21,15 @@ var particleLoginToken = "";
 
 Weather.api_key = process.env.WEATHER_KEY;
 Weather.temp = 'k';
+
 var port = process.env.PORT || 3000;
+var chatbotPort = 5000;
 var connected = false;
 
 var songFilename = "./audio/song.wav";
 var audioRecordingFilename = "./audio/recording.wav";
 var audioSynthFilename = "./audio/synth.wav";
+var dialupFilename = "./audio/dialup.wav";
 var isRecording = false;
 
 var recordingStart = 0;
@@ -37,23 +47,36 @@ var luis = LUISClient({
 	verbose: true
 });
 
+var log = function(message, noReturn) {
+	if (!noReturn) {
+		if (!message.startsWith('*')) console.log(message);		
+		message = message + "\n\n";
+	}
+	io.emit('message', message);				
+}
+
+io.on('connection', function(socket) {
+	log('*splash');
+});
+
+
 net.createServer(function (sock) {
-	console.log('CONNECTED: ' + sock.remoteAddress + ':' + sock.remotePort);
-	console.log("Ready for data");
+	log('Chatbot AI host connected: ' + sock.remoteAddress + ':' + sock.remotePort);
+
+	log ('*prompt');
 	connected = true;
 
-	
-
 	try {
-		sock.setKeepAlive(true, 30000);
+		sock.setKeepAlive(true, 1000);
 	} catch (exception) {
-		console.log('exception', exception);
+		log('exception', exception);
 	}
 
 	sock.on('data', function (data) {
 		saveIncomingAudio(data, function () {
 			recognizeRecording(function (recognizedText, speechToken) {
 				aiPredict(recognizedText, function (botResponseText, afterBotResponseCallback) {
+					log("Responding: " + botResponseText);
 					textToSpeech(botResponseText, audioSynthFilename, speechToken, function (err, data) {
 					if (!err) {
 					var audioSynthStream = fs.createReadStream(audioSynthFilename);
@@ -61,11 +84,15 @@ net.createServer(function (sock) {
 					streamAudioOut(audioSynthStream, function streamEnded() {
 
 						if (botResponseText.indexOf("song") >= 0) {
+							log ("Singing.........................");							
 							var songStream = fs.createReadStream(songFilename);
-							streamAudioOut(songStream);
+							streamAudioOut(songStream, function() {
+								log ("*prompt");								
+							});
 						}
 						else {
 							if (afterBotResponseCallback) { afterBotResponseCallback(); }
+							log ("*prompt");							
 						}						
 				});
 				}
@@ -76,18 +103,21 @@ net.createServer(function (sock) {
 	});
 
 	sock.on('error', function (err) {
-		console.log('ERROR: ' + err + ' at ' + sock.address + ' ' + sock.remotePort);
+		console.error(err + ' at ' + sock.address + ' ' + sock.remotePort);
 		connected = false;
+		sock.end();
 	});
 
 	sock.on('end', function (data) {
-		console.log('END: ' + sock.remoteAddress + ' ' + sock.remotePort);
+		console.error('END: ' + sock.remoteAddress + ' ' + sock.remotePort);
 		connected = false;
 	});
 
 	sock.on('close', function (data) {
-		console.log('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
+		console.error('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
 		connected = false;
+
+		log ('Chatbot AI host disconnected');
 	});
 
 	var streamAudioOut = function (readableStream, callback) {
@@ -96,7 +126,7 @@ net.createServer(function (sock) {
 			{ bitDepth: 16, signed: true },
 			{ bitDepth: 8, signed: false });
 
-		var throttle = new Throttle({ bps: 16 * 1024, chunkSize: 16 });
+		var throttle = new Throttle({ bps: 16 * 1024, chunkSize: 16,  highWaterMark: 500 });
 
 		var stream = readableStream.pipe(pcmTransform).pipe(throttle);
 		stream.pipe(sock, { end: false });
@@ -105,33 +135,60 @@ net.createServer(function (sock) {
 			if (callback) { callback(); }
 		});
 
+		stream.on('error', function (err) {
+			console.error(err);
+		});
+
 	}
 
-	var songStream = fs.createReadStream("./audio/dialup.wav");
-	streamAudioOut(songStream);
+	var dialupStream = fs.createReadStream(dialupFilename);
 
-}).listen(port);
-console.log('Waiting for TCP client connection on port: ' + port);
+	streamAudioOut(dialupStream, function() {
+	});
+
+}).listen(chatbotPort);
+console.log('Waiting for TCP client connection on port: ' + chatbotPort);
 
 var loginToParticle = function () { // Note: self executing
 	particle.login({ username: process.env.PARTICLE_USERNAME, password: process.env.PARTICLE_PASSWORD }).then(function (data) {
-		console.log('Logged into Particle Cloud')
+		
 		particleLoginToken = data.body.access_token;
 
-		setTimeout(updateServer, 3000); // if it doesn't connect in 3 seconds give it the latest IP
+		listenForPhoton();
+
 	});
 }.call(this)
 
-var updateServer = function () {
-	if (!connected) {
-		particle.getDevice({ deviceId: process.env.PARTICLE_DEVICE_ID, auth: particleLoginToken }).then(function (deviceInfo) {
-			if (!deviceInfo.body.connected || connected) return;
-			host = getWifiAddress();
-			particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'updateServer', argument: host + ":" + port, auth: particleLoginToken }).then(function (hostData) {
-				console.log('Particle: Updated server: ' + host + ":" + port);
+var listenForPhoton = function() {
+	particle.getDevice({ deviceId: process.env.PARTICLE_DEVICE_ID, auth: particleLoginToken }).then(function (deviceInfo) {
+		particle.getEventStream({ deviceId: process.env.PARTICLE_DEVICE_ID, auth: particleLoginToken }).then(function(stream) {
+			log('Logged into Particle Cloud')
+			
+			stream.on('spark/status', function(msg) {
 
-			}, function (err) { console.log("Particle 'updateServer': " + err) });
-		}, function (err) { });
+				if (msg.data === 'online') {
+					log("Chatbot online");
+					updatePhotonWithHost();	
+				} else if (msg.data == 'offline') {
+					log("Chatbot offline");
+
+				} 
+			});
+
+		  }, function(err) {
+			 console.error("Particle: Get Event Stream: " + err);
+		  });
+			   	
+		
+	}, function (err) { console.error("Particle: Get Device: " + err) });
+}
+
+var updatePhotonWithHost = function () {
+	if (!connected) {			
+		host = getWifiAddress();
+		particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'updateServer', argument: host + ":" + chatbotPort, auth: particleLoginToken }).then(function (hostData) {
+			console.log('Updated photon host: ' + host + ":" + chatbotPort);		
+		}, function (err) { console.error("Particle 'updatePhotonWithHost': " + err) });
 	}
 }
 
@@ -150,25 +207,27 @@ function getWifiAddress() {
 	return result;
 }
 
-
-
 var saveIncomingAudio = function (data, callback) {
-	if (!isRecording)
+	if (!isRecording) {
+		log("Listening")
 		writeWavHeader(audioRecordingFilename);
-
+	}
+	
 	try {
 		if (isRecordingDone(data)) {
 			isRecording = false;
-			console.log();
-			console.log('Recorded for ' + recordingLength / 1000 + ' seconds');
+			log("");
+			log('Listened for ' + recordingLength / 1000 + ' seconds');
 
 			if (callback) { callback(); }
 		} else {
+			log('.',true);
 			process.stdout.write(".");
 			outStream.write(data);
 		}
 	} catch (ex) {
 		console.error("Error saving incoming audio: " + ex);
+		log('*prompt');		
 	}
 }
 
@@ -201,16 +260,19 @@ var isRecordingDone = function (data) {
 
 var recognizeRecording = function (callback) {
 	getAccessToken(process.env.MICROSOFT_SPEECH_API_KEY, function (err, token) {
-		console.log('Got speech access token');
 		speechToText(audioRecordingFilename, token, function (err, body) {
 			if (err) {
-				console.log("Speech to text error: " + err);
+				log("Speech to text error: " + err);
+				log('*prompt');
+				
 			}
 			else if (body.header.status === 'success') {
-				console.log("Recognized text: " + body.header.name);
+				log("Recognized speech: " + body.header.name);
 				callback(body.header.name, token)
 			} else {
-				console.log("Speech to text error: " + body.header);
+				log("Speech to text error: " + body.header);
+				log('*prompt');
+				
 			};
 		});
 	});
@@ -251,17 +313,17 @@ var textToSpeech = function (text, filename, accessToken, callback) {
 		}
 	}, function (err, resp, body) {
 		if (err) {
-			console.log('Text to Speech Error: ' + err);
+			log('Text to Speech Error: ' + err);
 			return callback(err);
 		}
 
 		fs.writeFile(filename, body, 'binary', function (err) {
 			if (err) {
-				console.log('Error writing audio: ' + err);
+				log('Error processing audio: ' + err);
 				return callback(err);
 			}
 
-			console.log("Wrote audio file: " + audioSynthFilename);
+			console.log("Processed audio: " + audioSynthFilename);
 			callback(null, body);
 		});
 	});
@@ -296,9 +358,11 @@ var lookupAndRespond = function (intent, respond, entities) {
 			break;
 
 		case "Drive":
-			let distance = entities && entities[0] && entities[0].type === 'builtin.number' ? entities[0].resolution.value : 5;
+			let seconds = entities && entities[0] && entities[0].type === 'builtin.number' ? entities[0].resolution.value : 5;
+
 			respond("ok, Let's go!", function() {
-				drive(distance);				
+				log('Drive for ' + seconds + ' seconds');				
+				drive(seconds);				
 			});
 			break;
 		case "Song":
@@ -320,13 +384,9 @@ var lookupAndRespond = function (intent, respond, entities) {
 }
 
 var drive = function (seconds) {
-	// particle.getDevice({ deviceId: process.env.PARTICLE_DEVICE_ID, auth: particleLoginToken }).then(function (deviceInfo) {
-	// 	if (!deviceInfo.body.connected) return;
-		particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'drive', argument: ""+seconds, auth: particleLoginToken }).then(function (data) {
-			console.log('Particle: Started Driving for ' + seconds + ' seconds');
+	particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'drive', argument: ""+seconds, auth: particleLoginToken }).then(function (data) {
 
-		}, function (err) { console.log("Particle 'drive': " + err) });
-	// }, function (err) {console.log('particle connect ' + err)});
+	}, function (err) { log("Particle 'drive': " + err) });
 }
 
 var getWeatherToday = function (callback) {
@@ -346,7 +406,9 @@ var aiPredict = function (predictText, botRespond) {
 	luis.predict(predictText, {
 		onSuccess: function (response) {
 
-			console.log(response);
+			log(JSON.stringify(response.topScoringIntent, null, '   '));
+
+			
 
 			lookupAndRespond(response.topScoringIntent.intent, botRespond, response.entities);
 		},
@@ -389,5 +451,16 @@ var speechToText = function (filename, accessToken, callback) {
 		});
 	});
 }
+
+app.get('/', function(req, res) {
+	res.sendFile(__dirname + '/public/default.html');
+   
+   });
+
+http.listen(port, function() {
+	console.log('listening on *: ' + port);
+
+	
+});
 
 

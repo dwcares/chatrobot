@@ -1,0 +1,22 @@
+
+.off #led, .off #led::after, .off #led::after  {
+    background-color: black;
+    border: none;
+    box-shadow: none;
+  }
+  
+  #overlay, #layer, #output {
+    transition: opacity 1200ms ease-out;
+  }
+  .off #overlay, .off #layer, .off #output {
+    opacity: 0.1;
+    transition: opacity 300ms ease-out;
+  }
+  
+  .off #screen, .off #screen::before, .off #screen::after {
+    -webkit-animation: none;
+    -moz-animation: none;
+    -ms-animation: none;
+    animation: none;
+  }
+  
