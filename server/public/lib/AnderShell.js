@@ -136,6 +136,18 @@
     print("");
   } 
 
+  function prompt() {
+    print('\n\n> ');
+  }
+
+  function command(cmd) {
+    print('\n');
+
+    if (doCommand) doCommand(cmd);
+
+  }
+
+
   window.onload = function() {
     $output = document.getElementById("output");
     $output.contentEditable = false;
@@ -143,6 +155,65 @@
     $output.value = '';
 
     print('> ');
+
+    
+    $output.onkeydown = function(ev) {
+      var k = ev.which || ev.keyCode;
+      var cancel = false;
+
+      if ( !_inited ) {
+        cancel = true;
+      } else {
+        if ( k == 9 ) {
+          cancel = true;
+        } else if ( k == 38 ) {
+          cancel = true;
+        } else if ( k == 40 ) {
+          cancel = true;
+        } else if ( k == 37 || k == 39 ) {
+          cancel = true;
+        }
+      }
+
+      if ( cancel ) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return false;
+      }
+
+      if ( k == 8 ) {
+        if ( _buffer.length ) {
+          _buffer.pop();
+        } else {
+          ev.preventDefault();
+          return false;
+        }
+      }
+
+      return true;
+    };
+
+    $output.onkeypress = function(ev) {
+      ev.preventDefault();
+      if ( !_inited ) {
+        return false;
+      }
+
+      var k = ev.which || ev.keyCode;
+      if ( k == 13 ) {
+        var cmd = _buffer.join('').replace(/\s+/, ' ');
+        _buffer = [];
+        command(cmd);
+      } else {
+        if ( !_locked ) {
+          var kc = String.fromCharCode(k);
+          _buffer.push(kc);
+          _ibuffer.push(kc);
+        }
+      }
+
+      return true;
+    };
 
     $output.onfocus = function() {
       update();

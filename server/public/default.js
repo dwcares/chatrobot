@@ -24,6 +24,10 @@ socket.on("message", function(msg) {
     }
 });
 
+function doCommand(msg) {
+    socket.emit('speak', msg);
+}
+
 function printSplash() {
     print("Chatbot Shell v0.1 .................................................\n");
     print("\n\n", true);                                                      

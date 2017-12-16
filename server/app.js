@@ -1,10 +1,3 @@
-var express = require('express');
-var app = express();
-app.use(express.static('public'));
-
-var http = require('http').Server(app);
-var io = require('socket.io')(http);
-
 const net = require('net');
 const request = require('request');
 const uuid = require('uuid');
@@ -12,24 +5,27 @@ const Particle = require('particle-api-js');
 const fs = require('fs');
 const Throttle = require('throttle');
 const PcmFormatTransform = require('pcm-format');
-const LUISClient = require("./luis_sdk");
+const LUISClient = require('./luis_sdk');
 const Weather = require('npm-openweathermap');
 const os = require('os');
 
+const shell = require('./shell');
+
+
 var particle = new Particle();
-var particleLoginToken = "";
+var particleLoginToken = '';
+var speechToken = '';
 
 Weather.api_key = process.env.WEATHER_KEY;
 Weather.temp = 'k';
 
-var port = process.env.PORT || 3000;
 var chatbotPort = 5000;
 var connected = false;
 
-var songFilename = "./audio/song.wav";
-var audioRecordingFilename = "./audio/recording.wav";
-var audioSynthFilename = "./audio/synth.wav";
-var dialupFilename = "./audio/dialup.wav";
+var songFilename = './audio/song.wav';
+var audioRecordingFilename = './audio/recording.wav';
+var audioSynthFilename = './audio/synth.wav';
+var dialupFilename = './audio/dialup.wav';
 var isRecording = false;
 
 var recordingStart = 0;
@@ -47,109 +43,14 @@ var luis = LUISClient({
 	verbose: true
 });
 
-var log = function(message, noReturn) {
-	if (!noReturn) {
-		if (!message.startsWith('*')) console.log(message);		
-		message = message + "\n\n";
-	}
-	io.emit('message', message);				
-}
 
-io.on('connection', function(socket) {
-	log('*splash');
-});
-
-
-net.createServer(function (sock) {
-	log('Chatbot AI host connected: ' + sock.remoteAddress + ':' + sock.remotePort);
-
-	log ('*prompt');
-	connected = true;
-
-	try {
-		sock.setKeepAlive(true, 1000);
-	} catch (exception) {
-		log('exception', exception);
-	}
-
-	sock.on('data', function (data) {
-		saveIncomingAudio(data, function () {
-			recognizeRecording(function (recognizedText, speechToken) {
-				aiPredict(recognizedText, function (botResponseText, afterBotResponseCallback) {
-					log("Responding: " + botResponseText);
-					textToSpeech(botResponseText, audioSynthFilename, speechToken, function (err, data) {
-					if (!err) {
-					var audioSynthStream = fs.createReadStream(audioSynthFilename);
-
-					streamAudioOut(audioSynthStream, function streamEnded() {
-
-						if (botResponseText.indexOf("song") >= 0) {
-							log ("Singing.........................");							
-							var songStream = fs.createReadStream(songFilename);
-							streamAudioOut(songStream, function() {
-								log ("*prompt");								
-							});
-						}
-						else {
-							if (afterBotResponseCallback) { afterBotResponseCallback(); }
-							log ("*prompt");							
-						}						
-				});
-				}
-			});
-		});
-	});
-	});
-	});
-
-	sock.on('error', function (err) {
-		console.error(err + ' at ' + sock.address + ' ' + sock.remotePort);
-		connected = false;
-		sock.end();
-	});
-
-	sock.on('end', function (data) {
-		console.error('END: ' + sock.remoteAddress + ' ' + sock.remotePort);
-		connected = false;
-	});
-
-	sock.on('close', function (data) {
-		console.error('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
-		connected = false;
-
-		log ('Chatbot AI host disconnected');
-	});
-
-	var streamAudioOut = function (readableStream, callback) {
-
-		var pcmTransform = new PcmFormatTransform(
-			{ bitDepth: 16, signed: true },
-			{ bitDepth: 8, signed: false });
-
-		var throttle = new Throttle({ bps: 16 * 1024, chunkSize: 16,  highWaterMark: 500 });
-
-		var stream = readableStream.pipe(pcmTransform).pipe(throttle);
-		stream.pipe(sock, { end: false });
-
-		stream.on('end', function () {
-			if (callback) { callback(); }
-		});
-
-		stream.on('error', function (err) {
-			console.error(err);
-		});
-
-	}
-
-	var dialupStream = fs.createReadStream(dialupFilename);
-
-	streamAudioOut(dialupStream, function() {
-	});
-
-}).listen(chatbotPort);
-console.log('Waiting for TCP client connection on port: ' + chatbotPort);
 
 var loginToParticle = function () { // Note: self executing
+
+	shell.events.on('connection', function() {
+		shell.log('*splash');			
+	});
+	
 	particle.login({ username: process.env.PARTICLE_USERNAME, password: process.env.PARTICLE_PASSWORD }).then(function (data) {
 		
 		particleLoginToken = data.body.access_token;
@@ -157,45 +58,48 @@ var loginToParticle = function () { // Note: self executing
 		listenForPhoton();
 
 	});
-}.call(this)
+}.call(this);
 
 var listenForPhoton = function() {
 	particle.getDevice({ deviceId: process.env.PARTICLE_DEVICE_ID, auth: particleLoginToken }).then(function (deviceInfo) {
 		particle.getEventStream({ deviceId: process.env.PARTICLE_DEVICE_ID, auth: particleLoginToken }).then(function(stream) {
-			log('Logged into Particle Cloud')
+			shell.log('Logged into Particle Cloud')
+			
+			setupAIServer();
 			
 			stream.on('spark/status', function(msg) {
 
 				if (msg.data === 'online') {
-					log("Chatbot online");
+					shell.log('Chatbot online');
 					updatePhotonWithHost();	
 				} else if (msg.data == 'offline') {
-					log("Chatbot offline");
+					shell.log('Chatbot offline');
 
 				} 
+
 			});
 
 		  }, function(err) {
-			 console.error("Particle: Get Event Stream: " + err);
+			 console.error('Particle: Get Event Stream: ' + err);
 		  });
 			   	
 		
-	}, function (err) { console.error("Particle: Get Device: " + err) });
+	}, function (err) { console.error('Particle: Get Device: ' + err) });
 }
 
 var updatePhotonWithHost = function () {
 	if (!connected) {			
 		host = getWifiAddress();
-		particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'updateServer', argument: host + ":" + chatbotPort, auth: particleLoginToken }).then(function (hostData) {
-			console.log('Updated photon host: ' + host + ":" + chatbotPort);		
-		}, function (err) { console.error("Particle 'updatePhotonWithHost': " + err) });
+		particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'updateServer', argument: host + ':' + chatbotPort, auth: particleLoginToken }).then(function (hostData) {
+			console.log('Updated photon host: ' + host + ':' + chatbotPort);		
+		}, function (err) { console.error('Particle \'updatePhotonWithHost\': ' + err) });
 	}
 }
 
 function getWifiAddress() {
 	var result;
 	var ifaces = os.networkInterfaces();
-	ifaces["Wi-Fi"].forEach(function (iface) {
+	ifaces['Wi-Fi'].forEach(function (iface) {
 		if ('IPv4' !== iface.family || iface.internal !== false) {
 			// skip over internal (i.e. 127.0.0.1) and non-ipv4 addresses
 			return;
@@ -207,27 +111,139 @@ function getWifiAddress() {
 	return result;
 }
 
+
+
+var setupAIServer = function() {
+	net.createServer(function (sock) {
+		shell.log('Chatbot client connected to AI: ' + sock.remoteAddress + ':' + sock.remotePort);
+		shell.log('*prompt');
+		connected = true;
+
+		try {
+			sock.setKeepAlive(true, 1000);
+		} catch (exception) {
+			shell.log('exception', exception);
+		}
+
+		getAccessToken(process.env.MICROSOFT_SPEECH_API_KEY, function (err, token) {
+			speechToken = token;
+		});
+
+		sock.on('data', function (data) {
+			saveIncomingAudio(data, function () {
+				recognizeRecording(function (recognizedText) {
+					aiPredict(recognizedText, function (botResponseText, afterBotResponseCallback) {
+						shell.log('Responding: \'' + botResponseText +'\'');
+						speak(botResponseText, function(){
+							
+							if (botResponseText.indexOf('song') >= 0) {
+								shell.log('Singing.........................');							
+								var songStream = fs.createReadStream(songFilename);
+								streamAudioOut(songStream, function() {
+									shell.log('*prompt');								
+								});
+							}
+							else {
+								if (afterBotResponseCallback) { afterBotResponseCallback(); }
+								shell.log('*prompt');							
+							}						
+						});
+					});
+
+				});
+			});
+		});
+
+		sock.on('error', function (err) {
+			console.error(err + ' at ' + sock.address + ' ' + sock.remotePort);
+			connected = false;
+			sock.end();
+		});
+
+		sock.on('end', function (data) {
+			console.error('END: ' + sock.remoteAddress + ' ' + sock.remotePort);
+			connected = false;
+		});
+
+		sock.on('close', function (data) {
+			console.error('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
+			connected = false;
+
+			shell.log('Chatbot client disconnected from AI');
+		});
+
+		var streamAudioOut = function (readableStream, callback) {
+
+			var pcmTransform = new PcmFormatTransform(
+				{ bitDepth: 16, signed: true },
+				{ bitDepth: 8, signed: false });
+
+			var throttle = new Throttle({ bps: 16 * 1024, chunkSize: 16,  highWaterMark: 500 });
+
+			var stream = readableStream.pipe(pcmTransform).pipe(throttle);
+			stream.pipe(sock, { end: false });
+
+			stream.on('end', function () {
+				if (callback) { callback(); }
+			});
+
+			stream.on('error', function (err) {
+				console.error(err);
+			});
+
+		}
+
+		var speak = function(msg, success, err) {
+			textToSpeech(msg, audioSynthFilename, speechToken, function (err, data) {
+				if (!err) {
+					var audioSynthStream = fs.createReadStream(audioSynthFilename);
+		
+					streamAudioOut(audioSynthStream, function streamEnded() {
+						if (success) success();							
+					});	
+				} else {
+					if (err) err('Text to Speech Error'+ err);
+				}
+			});
+		}
+
+
+
+		shell.events.on('speak', function(msg) {
+			speak(msg, function() {
+				shell.log('*prompt');
+			});
+		});
+	
+	}).listen(chatbotPort);
+	shell.log('Chatbot AI Server started on port: ' + chatbotPort);
+}
+
+//////////////////////////////////////////////////
+/////////// Audio Streaming //////////////////////
+//////////////////////////////////////////////////
+
 var saveIncomingAudio = function (data, callback) {
 	if (!isRecording) {
-		log("Listening")
+		shell.log('Listening')
 		writeWavHeader(audioRecordingFilename);
 	}
 	
 	try {
 		if (isRecordingDone(data)) {
 			isRecording = false;
-			log("");
-			log('Listened for ' + recordingLength / 1000 + ' seconds');
+			shell.log('');
+			shell.log('Listened for ' + recordingLength / 1000 + ' seconds');
 
 			if (callback) { callback(); }
 		} else {
-			log('.',true);
-			process.stdout.write(".");
+			shell.log('.',true);
+			process.stdout.write('.');
 			outStream.write(data);
 		}
 	} catch (ex) {
-		console.error("Error saving incoming audio: " + ex);
-		log('*prompt');		
+		console.error('Error saving incoming audio: ' + ex);
+		shell.log('*prompt');		
 	}
 }
 
@@ -259,22 +275,20 @@ var isRecordingDone = function (data) {
 }
 
 var recognizeRecording = function (callback) {
-	getAccessToken(process.env.MICROSOFT_SPEECH_API_KEY, function (err, token) {
-		speechToText(audioRecordingFilename, token, function (err, body) {
-			if (err) {
-				log("Speech to text error: " + err);
-				log('*prompt');
-				
-			}
-			else if (body.header.status === 'success') {
-				log("Recognized speech: " + body.header.name);
-				callback(body.header.name, token)
-			} else {
-				log("Speech to text error: " + body.header);
-				log('*prompt');
-				
-			};
-		});
+	speechToText(audioRecordingFilename, speechToken, function (err, body) {
+		if (err) {
+			shell.log('Speech to text error: ' + JSON.stringify(err));
+			shell.log('*prompt');
+			
+		}
+		else if (body.header.status === 'success') {
+			shell.log('Recognized speech: ' + body.header.name);
+			callback(body.header.name)
+		} else {
+			shell.log('Speech to text error: ' + body.header);
+			shell.log('*prompt');
+			
+		};
 	});
 }
 
@@ -297,8 +311,13 @@ var getAccessToken = function (key, callback) {
 	});
 }
 
-var textToSpeech = function (text, filename, accessToken, callback) {
-	var ssmlPayload = "<speak version='1.0' xml:lang='en-us'><voice xml:lang='en-US' xml:gender='Male' name='Microsoft Server Speech Text to Speech Voice (en-US, BenjaminRUS)'>" + text + "</voice></speak>";
+var textToSpeech = function (text, filename, accessToken, callback, male) {
+	 var ssmlPayload = "<speak version='1.0' xml:lang='en-us'><voice xml:lang='en-US' xml:gender='Female' name='Microsoft Server Speech Text to Speech Voice (en-US, ZiraRUS)'>" + text + "</voice></speak>";
+
+	 if (male) {
+		ssmlPayload = "<speak version='1.0' xml:lang='en-us'><voice xml:lang='en-US' xml:gender='Male' name='Microsoft Server Speech Text to Speech Voice (en-US, BenjaminRUS)'>" + text + "</voice></speak>";
+	 }
+	
 	request.post({
 		url: 'https://speech.platform.bing.com/synthesize',
 		body: ssmlPayload,
@@ -313,70 +332,69 @@ var textToSpeech = function (text, filename, accessToken, callback) {
 		}
 	}, function (err, resp, body) {
 		if (err) {
-			log('Text to Speech Error: ' + err);
+			shell.log('Text to Speech Error: ' + err);
 			return callback(err);
 		}
 
 		fs.writeFile(filename, body, 'binary', function (err) {
 			if (err) {
-				log('Error processing audio: ' + err);
+				shell.log('Error processing audio: ' + err);
 				return callback(err);
 			}
 
-			console.log("Processed audio: " + audioSynthFilename);
 			callback(null, body);
 		});
 	});
 }
 
 var lookupAndRespond = function (intent, respond, entities) {
-	var response = ""
+	var response = ''
 
 	switch (intent) {
-		case "Greeting":
-			respond("Hello friend!");
+		case 'Greeting':
+			respond('Hello friend!');
 			break;
 
-		case "Greeting.HowAreYou":
-			respond("Hi, I'm doing great!");
+		case 'Greeting.HowAreYou':
+			respond('Hi, I\'m doing great!');
 			break;
 
-		case "Name":
-			respond("My name is Chat Bot.");
+		case 'Name':
+			respond('My name is Chat Bot.');
 			break;
 
-		case "Joke":
-			respond("Why was the robot angry? Because someone kept pushing his buttons!");
+		case 'Joke':
+			respond('Why was the robot angry? Because someone kept pushing his buttons!');
 			break;
 
-		case "Weather.GetCondition":
+		case 'Weather.GetCondition':
 			getWeatherToday(respond);
 			break;
 
-		case "Weather.GetForecast":
-			respond("The weather looks like it's going to be great!");
+		case 'Weather.GetForecast':
+			respond('The weather looks like it\'s going to be great!');
 			break;
 
-		case "Drive":
+		case 'Drive':
 			let seconds = entities && entities[0] && entities[0].type === 'builtin.number' ? entities[0].resolution.value : 5;
 
-			respond("ok, Let's go!", function() {
-				log('Drive for ' + seconds + ' seconds');				
+			respond('ok, Let\'s go!', function() {
+				shell.log('Drive for ' + seconds + ' seconds');				
 				drive(seconds);				
 			});
 			break;
-		case "Song":
-			respond("I'd love to sing you a song!")
+		case 'Song':
+			respond('I\'d love to sing you a song!')
 			break;
-		case "Laws": 
-			respond("A robot may not injure a human being, or, through inaction, allow a human being to come to harm.");
+		case 'Laws': 
+			respond('A robot may not injure a human being, or, through inaction, allow a human being to come to harm.');
 			break;
-		case "Birthday": 
-			respond("I was born November 7th, 1985 in Katsushika Tokyo.");
+		case 'Birthday': 
+			respond('I was born November 7th, 1985 in Katsushika Tokyo.');
 			break;
-		case "None":
+		case 'None':
 		default:
-			respond("Sorry Dave, I can't do that");
+			respond('Sorry Dave, I can\'t do that');
 			break;
 
 	}
@@ -384,20 +402,20 @@ var lookupAndRespond = function (intent, respond, entities) {
 }
 
 var drive = function (seconds) {
-	particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'drive', argument: ""+seconds, auth: particleLoginToken }).then(function (data) {
+	particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'drive', argument: ''+seconds, auth: particleLoginToken }).then(function (data) {
 
-	}, function (err) { log("Particle 'drive': " + err) });
+	}, function (err) { shell.log('Particle \'drive\': ' + err) });
 }
 
 var getWeatherToday = function (callback) {
 
 	Weather.current_weather()
 		.then(function (result) {
-			var currentWeather = "It's " + result.weather[0].description + " and the current temp is " + parseInt(1.8 * (result.main.temp - 273) + 32) + "degrees!";
+			var currentWeather = 'It\'s ' + result.weather[0].description + ' and the current temp is ' + parseInt(1.8 * (result.main.temp - 273) + 32) + ' degrees!';
 
 			callback(currentWeather);
 		}, function (error) {
-			callback("Sorry, I couldn't get the weather");
+			callback('Sorry, I couldn\'t get the weather');
 		});
 
 }
@@ -406,16 +424,14 @@ var aiPredict = function (predictText, botRespond) {
 	luis.predict(predictText, {
 		onSuccess: function (response) {
 
-			log(JSON.stringify(response.topScoringIntent, null, '   '));
-
-			
+			shell.log(JSON.stringify(response.topScoringIntent, null, '   '));
 
 			lookupAndRespond(response.topScoringIntent.intent, botRespond, response.entities);
 		},
 		onFailure: function (err) {
 			console.error(err);
 
-			lookupAndRespond("None", botRespond);
+			lookupAndRespond('None', botRespond);
 		}
 	});
 }
@@ -452,15 +468,6 @@ var speechToText = function (filename, accessToken, callback) {
 	});
 }
 
-app.get('/', function(req, res) {
-	res.sendFile(__dirname + '/public/default.html');
-   
-   });
 
-http.listen(port, function() {
-	console.log('listening on *: ' + port);
-
-	
-});
 
 
