@@ -8,6 +8,8 @@ const PcmFormatTransform = require('pcm-format');
 const LUISClient = require('./luis_sdk');
 const Weather = require('npm-openweathermap');
 const os = require('os');
+var chatbotPort = process.env.CHATBOT_PORT || 5000;
+
 
 const shell = require('./shell');
 
@@ -19,7 +21,6 @@ var speechToken = '';
 Weather.api_key = process.env.WEATHER_KEY;
 Weather.temp = 'k';
 
-var chatbotPort = 5000;
 var connected = false;
 
 var songFilename = './audio/song.wav';
@@ -57,6 +58,8 @@ var loginToParticle = function () { // Note: self executing
 
 		listenForPhoton();
 
+	}, function(err) {
+		console.log ("Particle login failed")
 	});
 }.call(this);
 
@@ -88,25 +91,37 @@ var listenForPhoton = function() {
 }
 
 var updatePhotonWithHost = function () {
-	if (!connected) {			
-		host = getWifiAddress();
-		particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'updateServer', argument: host + ':' + chatbotPort, auth: particleLoginToken }).then(function (hostData) {
-			console.log('Updated photon host: ' + host + ':' + chatbotPort);		
-		}, function (err) { console.error('Particle \'updatePhotonWithHost\': ' + err) });
-	}
+	var host = getWifiAddress();
+	console.log('host: ' + host);
+	
+	particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'updateServer', argument: host + ':' + chatbotPort, auth: particleLoginToken }).then(function (hostData) {
+		console.log('Updated photon host: ' + host + ':' + chatbotPort);		
+	}, function (err) { console.error('Particle \'updatePhotonWithHost\': ' + err) });
 }
 
 function getWifiAddress() {
-	var result;
-	var ifaces = os.networkInterfaces();
-	ifaces['Wi-Fi'].forEach(function (iface) {
-		if ('IPv4' !== iface.family || iface.internal !== false) {
-			// skip over internal (i.e. 127.0.0.1) and non-ipv4 addresses
-			return;
-		}
+	var result = process.env.CHATBOT_HOST;
+	
+	if (!connected && !process.env.CHATBOT_HOST) {
 
-		result = iface.address;
-	});
+		try {
+
+			var ifaces = os.networkInterfaces();
+			console.log(JSON.stringify(ifaces));
+			ifaces['Wi-Fi'].forEach(function (iface) {
+				if ('IPv4' !== iface.family || iface.internal !== false) {
+					// skip over internal (i.e. 127.0.0.1) and non-ipv4 addresses
+					return;
+				}
+		
+				result = iface.address;
+			});
+		
+		} catch(ex) {
+			console.log('Error getting local IP: ' + ex);
+		}
+	}
+
 
 	return result;
 }
