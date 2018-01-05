@@ -137,7 +137,7 @@ var setupAIServer = function() {
 		try {
 			sock.setKeepAlive(true, 1000);
 		} catch (exception) {
-			shell.log('exception', exception);
+			console.log('exception', exception);
 		}
 
 		getAccessToken(process.env.MICROSOFT_SPEECH_API_KEY, function (err, token) {
@@ -172,7 +172,13 @@ var setupAIServer = function() {
 		sock.on('error', function (err) {
 			console.error(err + ' at ' + sock.address + ' ' + sock.remotePort);
 			connected = false;
+
+			shell.events.removeAllListeners();
+			sock.removeAllListeners();
 			sock.end();
+			sock.destroy();
+			sock = null;
+			
 		});
 
 		sock.on('end', function (data) {
@@ -188,6 +194,8 @@ var setupAIServer = function() {
 		});
 
 		var streamAudioOut = function (readableStream, callback) {
+
+			if (!sock) return;
 
 			var pcmTransform = new PcmFormatTransform(
 				{ bitDepth: 16, signed: true },
@@ -221,8 +229,6 @@ var setupAIServer = function() {
 				}
 			});
 		}
-
-
 
 		shell.events.on('speak', function(msg) {
 			speak(msg, function() {
@@ -387,7 +393,7 @@ var lookupAndRespond = function (intent, respond, entities) {
 			break;
 
 		case 'Weather.GetForecast':
-			respond('The weather looks like it\'s going to be great!');
+			getWeatherForecast(respond);
 			break;
 
 		case 'Drive':
@@ -434,6 +440,29 @@ var getWeatherToday = function (callback) {
 		});
 
 }
+
+
+var getWeatherForecast = function (callback) {
+	
+		Weather.forecast_weather()
+			.then(function (result) {
+				var forecastWeather = 'Tomorow it will be ' + 
+					result[4].weather[0].description + ' and ' +
+					parseInt(1.8 * (result[4].main.temp - 273) + 32) + 
+					' degrees at ' + (new Date(result[4].dt_txt)).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+
+				forecastWeather += ', and ' + 
+					result[7].weather[0].description + ' and ' +
+					parseInt(1.8 * (result[7].main.temp - 273) + 32) + 
+					' degrees at ' + (new Date(result[7].dt_txt)).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+
+
+				callback(forecastWeather);
+			}, function (error) {
+				callback('Sorry, I couldn\'t get the weather forecast');
+			});
+	
+	}
 
 var aiPredict = function (predictText, botRespond) {
 	luis.predict(predictText, {
