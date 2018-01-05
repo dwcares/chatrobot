@@ -43,5 +43,5 @@ function printSplash() {
     print("\n\n\n", true);                                                      
 
     print(padCenter("Chatbot® YU-U-ZO® #5404 by Tomy® 1985.", 80), true);
-    print("\n\n> ", true);
+    print("\n", true);
 }

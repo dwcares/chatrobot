@@ -50,6 +50,10 @@ var loginToParticle = function () { // Note: self executing
 
 	shell.events.on('connection', function() {
 		shell.log('*splash');			
+
+		if (connected) {
+			shell.log('*prompt');
+		}
 	});
 	
 	particle.login({ username: process.env.PARTICLE_USERNAME, password: process.env.PARTICLE_PASSWORD }).then(function (data) {
@@ -130,7 +134,8 @@ function getWifiAddress() {
 
 var setupAIServer = function() {
 	net.createServer(function (sock) {
-		shell.log('Chatbot client connected to AI: ' + sock.remoteAddress + ':' + sock.remotePort);
+		shell.log('Chatbot connected to AI');
+		console.log('Host:  ' + sock.remoteAddress + ':' + sock.remotePort);
 		shell.log('*prompt');
 		connected = true;
 
