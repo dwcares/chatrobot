@@ -8,14 +8,19 @@ const PcmFormatTransform = require('pcm-format');
 const LUISClient = require('./luis_sdk');
 const Weather = require('npm-openweathermap');
 const os = require('os');
-var chatbotPort = process.env.CHATBOT_PORT || 5000;
-
-
 const shell = require('./shell');
 
+var chatbotPort = process.env.CHATBOT_PORT || 5000;
 
 var particle = new Particle();
 var particleLoginToken = '';
+
+var luis = LUISClient({
+	appId: process.env.MICROSOFT_LUIS_APPID,
+	appKey: process.env.MICROSOFT_LUIS_KEY,
+	verbose: true
+});
+
 var speechToken = '';
 
 Weather.api_key = process.env.WEATHER_KEY;
@@ -23,11 +28,12 @@ Weather.temp = 'k';
 
 var connected = false;
 
-var songFilename = './audio/song.wav';
 var audioRecordingFilename = './audio/recording.wav';
 var audioSynthFilename = './audio/synth.wav';
-var dialupFilename = './audio/dialup.wav';
 var isRecording = false;
+
+var songFilename = './audio/song.wav';
+var dialupFilename = './audio/dialup.wav';
 
 var recordingStart = 0;
 var recordingLength = 0;
@@ -38,60 +44,44 @@ var bitsPerSample = 8;
 var numChannels = 1;
 var outStream;
 
-var luis = LUISClient({
-	appId: process.env.MICROSOFT_LUIS_APPID,
-	appKey: process.env.MICROSOFT_LUIS_KEY,
-	verbose: true
-});
-
-
-
-var loginToParticle = function () { // Note: self executing
-
-	shell.events.on('connection', function() {
-		shell.log('*splash');			
-
-		if (connected) {
-			shell.log('*prompt');
-		}
-	});
+function loginToParticle() {
 	
-	particle.login({ username: process.env.PARTICLE_USERNAME, password: process.env.PARTICLE_PASSWORD }).then(function (data) {
-		
+	return particle.login({ username: process.env.PARTICLE_USERNAME, password: process.env.PARTICLE_PASSWORD }).then(function (data) {
 		particleLoginToken = data.body.access_token;
-
-		listenForPhoton();
 
 	}, function(err) {
 		console.log ("Particle login failed")
 	});
-}.call(this);
+}
 
-var listenForPhoton = function() {
-	particle.getDevice({ deviceId: process.env.PARTICLE_DEVICE_ID, auth: particleLoginToken }).then(function (deviceInfo) {
-		particle.getEventStream({ deviceId: process.env.PARTICLE_DEVICE_ID, auth: particleLoginToken }).then(function(stream) {
-			shell.log('Logged into Particle Cloud')
-			
-			setupAIServer();
-			
-			stream.on('spark/status', function(msg) {
+function setupPhoton() {
+	return particle
+		.getDevice({
+				deviceId: process.env.PARTICLE_DEVICE_ID, 
+				auth: particleLoginToken })
+		.catch(function (err) { 
+			console.error('Particle: Get Device: ' + err) })
+		.then(function (deviceInfo) {
+			return particle.getEventStream({
+				deviceId: process.env.PARTICLE_DEVICE_ID, 
+				auth: particleLoginToken })
+		})
+		.catch(function(err) {
+			console.error('Particle: Get Event Stream: ' + err);
+		});
+}
 
-				if (msg.data === 'online') {
-					shell.log('Chatbot online');
-					updatePhotonWithHost();	
-				} else if (msg.data == 'offline') {
-					shell.log('Chatbot offline');
+var listenForPhoton = function (stream) {
+	shell.log('Logged into Particle Cloud')
 
-				} 
-
-			});
-
-		  }, function(err) {
-			 console.error('Particle: Get Event Stream: ' + err);
-		  });
-			   	
-		
-	}, function (err) { console.error('Particle: Get Device: ' + err) });
+	stream.on('spark/status', function(msg) {
+		if (msg.data === 'online') {
+			shell.log('Chatbot online');
+			updatePhotonWithHost();	
+		} else if (msg.data == 'offline') {
+			shell.log('Chatbot offline');
+		} 
+	})
 }
 
 var updatePhotonWithHost = function () {
@@ -130,10 +120,15 @@ function getWifiAddress() {
 	return result;
 }
 
+/////////////////////////////////////////////////////
+/////////// Audio Streaming TCP Server //////////////
+/////////////////////////////////////////////////////
 
-
-var setupAIServer = function() {
+var setupAudioServer = function() {	
+	
 	net.createServer(function (sock) {
+
+		
 		shell.log('Chatbot connected to AI');
 		console.log('Host:  ' + sock.remoteAddress + ':' + sock.remotePort);
 		shell.log('*prompt');
@@ -145,7 +140,7 @@ var setupAIServer = function() {
 			console.log('exception', exception);
 		}
 
-		getAccessToken(process.env.MICROSOFT_SPEECH_API_KEY, function (err, token) {
+		getSpeechAccessToken(process.env.MICROSOFT_SPEECH_API_KEY, function (err, token) {
 			speechToken = token;
 		});
 
@@ -167,6 +162,8 @@ var setupAIServer = function() {
 								if (afterBotResponseCallback) { afterBotResponseCallback(); }
 								shell.log('*prompt');							
 							}						
+						}, function(err) {
+							console.log(err);
 						});
 					});
 
@@ -236,11 +233,12 @@ var setupAIServer = function() {
 		}
 
 		shell.events.on('speak', function(msg) {
+			shell.log('Speaking: ' + msg);
 			speak(msg, function() {
 				shell.log('*prompt');
 			});
 		});
-	
+
 	}).listen(chatbotPort);
 	shell.log('Chatbot AI Server started on port: ' + chatbotPort);
 }
@@ -318,7 +316,12 @@ var recognizeRecording = function (callback) {
 	});
 }
 
-var getAccessToken = function (key, callback) {
+
+/////////////////////////////////////////////
+/////////// Bing Speech API /////////////////
+/////////////////////////////////////////////
+
+function getSpeechAccessToken(key, callback) {
 	request.post({
 		url: 'https://api.cognitive.microsoft.com/sts/v1.0/issueToken',
 		headers: {
@@ -337,7 +340,7 @@ var getAccessToken = function (key, callback) {
 	});
 }
 
-var textToSpeech = function (text, filename, accessToken, callback, male) {
+function textToSpeech(text, filename, accessToken, callback, male) {
 	 var ssmlPayload = "<speak version='1.0' xml:lang='en-us'><voice xml:lang='en-US' xml:gender='Female' name='Microsoft Server Speech Text to Speech Voice (en-US, ZiraRUS)'>" + text + "</voice></speak>";
 
 	 if (male) {
@@ -373,8 +376,44 @@ var textToSpeech = function (text, filename, accessToken, callback, male) {
 	});
 }
 
-var lookupAndRespond = function (intent, respond, entities) {
-	var response = ''
+function speechToText(filename, accessToken, callback) {
+	fs.readFile(filename, function (err, waveData) {
+		if (err) return callback(err);
+		request.post({
+			url: 'https://speech.platform.bing.com/recognize',
+			qs: {
+				'scenarios': 'ulm',
+				'appid': 'D4D52672-91D7-4C74-8AD8-42B1D98141A5', // This magic value is required
+				'locale': 'en-US',
+				'device.os': 'wp7',
+				'version': '3.0',
+				'format': 'json',
+				'requestid': uuid.v4(),
+				'instanceid': 'f7370be0-c9b3-46a6-bf6e-a7f6049a1aba'
+			},
+			body: waveData,
+			headers: {
+				'Authorization': 'Bearer ' + accessToken,
+				'Content-Type': 'audio/wav; samplerate=' + sampleRate + '; sourcerate=' + sampleRate,
+				'Content-Length': waveData.length
+			}
+		}, function (err, resp, body) {
+			if (err) return callback(err);
+			try {
+				callback(null, JSON.parse(body));
+			} catch (e) {
+				callback(e);
+			}
+		});
+	});
+}
+
+
+//////////////////////////////////////////////////
+/////////// Chatbot AI Behaviors /////////////////
+//////////////////////////////////////////////////
+
+function lookupAndRespond(intent, respond, entities) {
 
 	switch (intent) {
 		case 'Greeting':
@@ -391,6 +430,7 @@ var lookupAndRespond = function (intent, respond, entities) {
 
 		case 'Joke':
 			respond('Why was the robot angry? Because someone kept pushing his buttons!');
+				
 			break;
 
 		case 'Weather.GetCondition':
@@ -426,14 +466,44 @@ var lookupAndRespond = function (intent, respond, entities) {
 	}
 
 }
+function aiPredict(predictText, botRespond) {
+	luis.predict(predictText, {
+		onSuccess: function (response) {
 
-var drive = function (seconds) {
+			shell.log(JSON.stringify(response.topScoringIntent, null, '   '));
+
+			lookupAndRespond(response.topScoringIntent.intent, botRespond, response.entities);
+		},
+		onFailure: function (err) {
+			console.error(err);
+
+			lookupAndRespond('None', botRespond);
+		}
+	});
+}
+
+function drive(seconds) {
 	particle.callFunction({ deviceId: process.env.PARTICLE_DEVICE_ID, name: 'drive', argument: ''+seconds, auth: particleLoginToken }).then(function (data) {
 
 	}, function (err) { shell.log('Particle \'drive\': ' + err) });
 }
 
-var getWeatherToday = function (callback) {
+function readBook(bookpath, respond) {
+	var book = fs.readFileSync(bookpath);
+	book = JSON.parse(book);
+
+	var queue = book.paragraphs.reverse();
+	
+	var read = function() {
+		if (queue.length > 0) {
+			respond(queue.pop(), read())					
+		}
+	}
+
+	respond(queue.pop(), read);
+}
+
+function getWeatherToday(callback) {
 
 	Weather.current_weather()
 		.then(function (result) {
@@ -446,8 +516,7 @@ var getWeatherToday = function (callback) {
 
 }
 
-
-var getWeatherForecast = function (callback) {
+function getWeatherForecast(callback) {
 	
 		Weather.forecast_weather()
 			.then(function (result) {
@@ -469,54 +538,20 @@ var getWeatherForecast = function (callback) {
 	
 	}
 
-var aiPredict = function (predictText, botRespond) {
-	luis.predict(predictText, {
-		onSuccess: function (response) {
+function setupShell() {
+	
+	shell.events.on('connection', function() {
+		shell.log('*splash');			
 
-			shell.log(JSON.stringify(response.topScoringIntent, null, '   '));
-
-			lookupAndRespond(response.topScoringIntent.intent, botRespond, response.entities);
-		},
-		onFailure: function (err) {
-			console.error(err);
-
-			lookupAndRespond('None', botRespond);
+		if (connected) {
+			shell.log('*prompt');
 		}
 	});
 }
 
-var speechToText = function (filename, accessToken, callback) {
-	fs.readFile(filename, function (err, waveData) {
-		if (err) return callback(err);
-		request.post({
-			url: 'https://speech.platform.bing.com/recognize',
-			qs: {
-				'scenarios': 'ulm',
-				'appid': 'D4D52672-91D7-4C74-8AD8-42B1D98141A5', // This magic value is required
-				'locale': 'en-US',
-				'device.os': 'wp7',
-				'version': '3.0',
-				'format': 'json',
-				'requestid': uuid.v4(),
-				'instanceid': 'f7370be0-c9b3-46a6-bf6e-a7f6049a1aba'
-			},
-			body: waveData,
-			headers: {
-				'Authorization': 'Bearer ' + accessToken,
-				'Content-Type': 'audio/wav; samplerate=' + sampleRate + '; sourcerate=' + sampleRate,
-				'Content-Length': waveData.length
-			}
-		}, function (err, resp, body) {
-			if (err) return callback(err);
-			try {
-				callback(null, JSON.parse(body));
-			} catch (e) {
-				callback(e);
-			}
-		});
-	});
-}
 
-
-
-
+setupShell()
+loginToParticle()
+	.then(setupPhoton)
+	.then(listenForPhoton)
+	.then(setupAudioServer) //S.waitforaudio
