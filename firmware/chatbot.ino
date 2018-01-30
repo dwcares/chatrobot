@@ -1,3 +1,4 @@
+#include <MelodySpeaker.h>
 #include "SimpleRingBuffer.h"
 #include <SparkIntervalTimer.h>
 #include <Debounce.h>
@@ -9,9 +10,10 @@
 #define DRIVE_UPDATE_FREQ 300
 #define PING_SENSOR_DELAY_MS 10
 
+#define EYES_LED A4
+#define EYES_MOTOR D3
 #define TRIG_PIN D4
 #define ECHO_PIN D5
-#define EYES_LED A4
 
 #define SINGLE_PACKET_MIN 512
 #define SINGLE_PACKET_MAX 1024
@@ -19,8 +21,6 @@
 
 #define AUDIO_TIMING_VAL 62 /* 16kHz */
 #define PLAYBACK_TIMING_VAL 62
-
-#define VOLUME 0.06
 
 #define MICROPHONE_PIN DAC1
 #define AUDIO_BUFFER_MAX 8192
@@ -36,8 +36,9 @@ SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 
 String serverHost =  "192.168.1.1";
-int serverPort = 3000;
+int serverPort = 3030;
 
+MelodySpeaker melodySpeaker = MelodySpeaker(TONE_PIN, false);
 
 uint8_t txBuffer[SINGLE_PACKET_MAX + 1];
 SimpleRingBuffer audio_buffer;
@@ -61,7 +62,6 @@ bool _isPlayback = false;
 bool _isDriving = false;
 
 bool _isConnected = false;
-float _volumeRatio = VOLUME;
 int lastClientCheck;
 
 Debounce debouncer = Debounce(); 
@@ -87,8 +87,8 @@ void setup() {
     pinMode(MICROPHONE_PIN, INPUT);
     pinMode(SPEAKER_PIN, OUTPUT);
     pinMode(EYES_LED, OUTPUT);
-    pinMode(D7, OUTPUT);
-    
+    pinMode(EYES_MOTOR, OUTPUT);
+
     pinMode(MOTOR_REVERSE_PIN, OUTPUT);
     pinMode(MOTOR_FORWARD_PIN, OUTPUT);
     setMotorSpeed(0);
@@ -102,11 +102,16 @@ void setup() {
     
     checkWifiConfig();
     
-    playTone();
+    melodySpeaker.begin();
+    melodySpeaker.setTempo(240);
+    
+    // digitalWrite(EYES_MOTOR, HIGH);
+
+    //melodySpeaker.setMelody("4C5,8G4,8G4,4A4,4G4,4  ,4B4,4C5");
 }
 
 void loop() {
-
+    
     updateRecordAndPlay();
     updateEyes();
     updateDriveDistance();
@@ -124,6 +129,7 @@ void updateRecordAndPlay() {
         startRecording();
         sendEvery(100);
     }  else {
+        melodySpeaker.processMelody();
         stopRecording();
         
         if (_isConnected) {
@@ -220,11 +226,8 @@ void updateDriveDistance() {
 
     if (_isDriving && millis() > lastUpdateDriveTime + DRIVE_UPDATE_FREQ) {
         
-      
-        
         uint32_t inchesRAW = measureInches(TRIG_PIN, ECHO_PIN, PING_SENSOR_DELAY_MS);
 
- 
         Serial.println(inchesRAW);
 
         if (inchesRAW > 20) {
@@ -241,29 +244,25 @@ void updateDriveDistance() {
           
         lastUpdateDriveTime = millis();
     }
-
 }
 
-int playTone() {
+int playMelody() {
+  
+    return 1;
+}
+
+int playTone(int melody[], int noteDurations[]) {
     
-    int melody[] = {1908,2551,2551,2273,2551,0,2024,1908}; //C4,G3,G3,A3,G3,0,B3,C4
-    int noteDurations[] = {4,8,8,4,4,4,4,4 };
+ 
     for (int thisNote = 0; thisNote < 8; thisNote++) {
 
-        // to calculate the note duration, take one second
-        // divided by the note type.
-        //e.g. quarter note = 1000 / 4, eighth note = 1000/8, etc.
         int noteDuration = 1000/noteDurations[thisNote];
         tone(TONE_PIN, melody[thisNote],noteDuration);
-    
-        // to distinguish the notes, set a minimum time between them.
-        // the note's duration + 30% seems to work well:
+        
         int pauseBetweenNotes = noteDuration * 1.30;
         delay(pauseBetweenNotes);
-        // stop the tone playing:
         noTone(TONE_PIN);
     }
-
 }
 
 int drive(String args) {
@@ -278,7 +277,7 @@ int stop(String args) {
 
     setMotorSpeed(0);
     
-    playTone();
+    playMelody();
 
     return 1;
 }
@@ -431,7 +430,7 @@ void playRxAudio() {
         //play audio
         value = recv_buffer.get();
         //value*=20;
-        value = map(value, 0,  255, 0, 4095);
+        value = map(value, 50,  255, 0, 4095);
 
         now = micros();
         diff = (now - lastWrite);
