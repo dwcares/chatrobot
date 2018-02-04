@@ -63,6 +63,11 @@ var LUISClient = function(initData) {
   const LUISReplyMask = "/luis/v2.0/apps/%s?subscription-key=%s&q=%s&contextid=%s&verbose=%s";
   const LUISVerbose = verbose ? "true" : "false";
   return {
+    predictIntent: function(text) {
+      return new Promise((resolve, reject) => {
+        this.predict(text, {onSuccess: resolve, onFailure: reject})
+      })
+    },
     /**
      * Initiates the prediction procedure
      *

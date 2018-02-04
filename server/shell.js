@@ -33,7 +33,7 @@
     });
 
     http.listen(port, function() {
-        console.log('Shell listening on *: ' + port);	
+        console.log('Shell listening on port: ' + port);	
     });
 
     module.exports.log = function(message, noReturn) {
