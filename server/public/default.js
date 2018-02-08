@@ -20,7 +20,7 @@ socket.on("message", function(msg) {
         clear();  
     }
     else {
-        print(msg, false, 80);      
+        print(msg, true, 80);      
     }
 });
 

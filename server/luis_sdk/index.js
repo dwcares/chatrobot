@@ -68,6 +68,32 @@ var LUISClient = function(initData) {
         this.predict(text, {onSuccess: resolve, onFailure: reject})
       })
     },
+    format: function(response) {
+
+      let intents = response.intents
+      let formattedIntents = 
+      `\nScore   | Intent\n----------------------------\n`
+      for (let i = 0; i< intents.length && i< 4; i++) {
+          const score = parseFloat(intents[i].score*100).toFixed(2)
+          formattedIntents += score.length == 4 ? `  ${score}%` : ` ${score}%`
+          formattedIntents += ` | ${intents[i].intent}\n`
+      }
+
+      let entities = response.entities
+      let formattedEntities = '';
+
+      if (entities.length > 0 ) {
+        formattedEntities += `----------------------------\n`
+        for (let i = 0; i< entities.length; i++) {
+          formattedEntities += `   Type:  ${entities[i].type}\n`
+          formattedEntities += ` Entity:   ${entities[i].entity}\n`
+          formattedEntities += `----------------------------\n`
+        }
+      }
+
+
+      return formattedIntents + formattedEntities
+    },
     /**
      * Initiates the prediction procedure
      *
