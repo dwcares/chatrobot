@@ -103,7 +103,7 @@ class ChatRobotBehaviorManager extends EventEmitter {
         this._errorBehavior._chatrobot = this._chatrobot
     }
     async start() {
-        await this._chatrobot.start()        
+        await this._chatrobot.start()    
     }
 }
 

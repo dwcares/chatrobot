@@ -24,7 +24,7 @@ const chatrobotBehaviorManager = new ChatRobotBehaviorManager(chatrobot)
 
 chatrobotBehaviorManager.on('info', console.log)
 chatrobotBehaviorManager.on('status', console.log)
-chatrobotBehaviorManager.on('error', console.error)
+chatrobotBehaviorManager.on('error', console.log)
 
 
 chatrobotBehaviorManager.addDefaultReply(`Sorry Dave, I can't do that`)
@@ -35,6 +35,12 @@ chatrobotBehaviorManager.addReply(`Name`, `My name is Chat Bot.`)
 chatrobotBehaviorManager.addReply(`Laws`, `A robot may not injure a human being, or, through inaction, allow a human being to come to harm.`)
 chatrobotBehaviorManager.addReply(`Birthday`, `I was born November 7th, 1985 in Katsushika Tokyo.`)
 chatrobotBehaviorManager.addReply(`Joke`, `Why was the robot angry? Because someone kept pushing his buttons!`)
+
+chatrobotBehaviorManager.addCustom('Melody', async function(entities) {
+		let melody = '4C6,4C6,4G6,4A6,4A6;4G6,4 ,4F6,4F6,4E6,4E6,4D6,4D6,4C6;240'
+		await this._chatrobot.playTone(melody)
+	}
+)
 
 chatrobotBehaviorManager.addCustom(`Weather.GetCondition`, async function (entities) {
 		const result = await Weather.current_weather()

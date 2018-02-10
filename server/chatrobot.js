@@ -63,18 +63,22 @@ class ChatRobot extends EventEmitter {
         await this.play(audio)
     }
     play(audio) {
-        if (!this._streamingInfo.isConnected)
-            throw new Error('CHATROBOT ERROR: Must be connected to streaming server to play audio')
+        if (!this._streamingInfo.isConnected) {
+            this.error('error', 'Must be connected to streaming server to play audio')
+            return
+        }
 
         return this._streamAudioOut(this._streamingInfo.sock, audio)
     }
     async playTone(tone) {
+        this.emit('info', `Playing tone: ${tone}`)
+
         await this._particle.callFunction({
             deviceId: this._deviceInfo.deviceId,
-            name: 'playTone', argument: '' + tone,
+            name: 'playTone', argument: tone,
             auth: this._deviceInfo.authToken
         }).catch(err => {
-            console.err(`PARTICLE ERROR: 'playTone': ${err}`)
+            console.error(`PARTICLE ERROR: 'playTone': ${err}`)
         })
     }
     async drive(seconds) {
@@ -83,17 +87,17 @@ class ChatRobot extends EventEmitter {
             name: 'drive', argument: '' + seconds,
             auth: this._deviceInfo.authToken
         }).catch(err => {
-            console.err(`PARTICLE ERROR: 'drive': ${err}`)
+            console.error(`PARTICLE ERROR: 'drive': ${err}`)
         })
 
     }
     async spinEyes(seconds) {
         await this._particle.callFunction({
             deviceId: this._deviceInfo.deviceId,
-            name: 'spinEyes', argument: '' + seconds,
+            name: 'eyeMotor', argument: '' + seconds,
             auth: this._deviceInfo.authToken
         }).catch(err => {
-            console.err(`PARTICLE ERROR: 'drive': ${err}`)
+            console.error(`PARTICLE ERROR: 'eyeMotor': ${err}`)
         })
     }
 
@@ -167,7 +171,7 @@ class ChatRobot extends EventEmitter {
             })
 
         } catch (ex) {
-            console.err('Error getting local IP: ' + ex)
+            console.error('Error getting local IP: ' + ex)
         }
 
         return result

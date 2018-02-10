@@ -30,6 +30,7 @@
 #define SPEAKER_PIN A3
 
 #define TONE_PIN WKP
+#define DEFAULT_TEMPO 240
 
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
@@ -72,6 +73,7 @@ int currentDriveSpeed = 0;
 int currentDistance = 0;
 
 unsigned long driveUntilTime = millis();
+unsigned long eyesMotorUntilTime = millis();
 
 void setup() {
     #if SERIAL_DEBUG_ON
@@ -81,8 +83,10 @@ void setup() {
     Particle.function("drive", drive);
     Particle.function("stop", stop);
     Particle.function("setMotor", setMotor);
-
+    Particle.function("eyeMotor" , eyeMotor);
+    Particle.function("playTone", playTone);
     Particle.function("updateServer", updateServer);
+    
 
     pinMode(MICROPHONE_PIN, INPUT);
     pinMode(SPEAKER_PIN, OUTPUT);
@@ -103,15 +107,13 @@ void setup() {
     checkWifiConfig();
     
     melodySpeaker.begin();
-    melodySpeaker.setTempo(240);
-    
-    // digitalWrite(EYES_MOTOR, HIGH);
+    melodySpeaker.setTempo(DEFAULT_TEMPO);
 
-    //melodySpeaker.setMelody("4C5,8G4,8G4,4A4,4G4,4  ,4B4,4C5");
 }
 
 void loop() {
     
+
     updateRecordAndPlay();
     updateEyes();
     updateDriveDistance();
@@ -126,6 +128,7 @@ void updateRecordAndPlay() {
 
     // Record and send audio
     if (debouncer.read() == LOW && _isConnected) {
+        
         startRecording();
         sendEvery(100);
     }  else {
@@ -148,6 +151,7 @@ void checkWifiConfig() {
         WiFi.listen();
     } else {
         Particle.connect();
+
         eyeMax = 800;
         
         // loadStateFromEEPROM();
@@ -155,18 +159,12 @@ void checkWifiConfig() {
     }
 }
 
-int recognized(String text) {
-    Serial.println("Recognized: " + text);
+int eyeMotor(String args) {
     
-     if (text.indexOf("go") >= 0) {
-    } else {
-    }
+    eyesMotorUntilTime = args.toInt()*1000 + millis();
+    digitalWrite(EYES_MOTOR, HIGH);
 
-    // if (text.toLowerCase().indexOf("stop") >= 0) {
-    //     motor.run (BRAKE | BACKWARD);
-    // }
-
-    return 0;
+    return 1;
 }
 
 int updateServer(String server) {
@@ -246,23 +244,24 @@ void updateDriveDistance() {
     }
 }
 
-int playMelody() {
-  
-    return 1;
-}
-
-int playTone(int melody[], int noteDurations[]) {
+int playTone(String args) {
+    int tempoIndex = args.lastIndexOf(';');
     
- 
-    for (int thisNote = 0; thisNote < 8; thisNote++) {
-
-        int noteDuration = 1000/noteDurations[thisNote];
-        tone(TONE_PIN, melody[thisNote],noteDuration);
+    if (tempoIndex > 0) {
+        String tempo = args.substring(tempoIndex);
+        int tempoVal = tempo.toInt();
         
-        int pauseBetweenNotes = noteDuration * 1.30;
-        delay(pauseBetweenNotes);
-        noTone(TONE_PIN);
+        if (tempoVal > 0) {
+            melodySpeaker.setTempo(tempoVal);
+        }
+     
+        args = args.substring(0, tempoIndex);
+    } else {
+        melodySpeaker.setTempo(DEFAULT_TEMPO);
     }
+    
+    melodySpeaker.setMelody(const_cast<char*>(args.c_str()));
+    return 1;
 }
 
 int drive(String args) {
@@ -277,7 +276,6 @@ int stop(String args) {
 
     setMotorSpeed(0);
     
-    playMelody();
 
     return 1;
 }
@@ -308,6 +306,7 @@ void setMotorSpeed(int speed) {
 }
 
 void updateEyes() {
+
     if (_isRecording || _isPlayback || _isDriving) {
         digitalWrite(EYES_LED, HIGH);
     } else {
@@ -322,6 +321,10 @@ void updateEyes() {
        eyesVal += eyesDir;
     
        analogWrite(EYES_LED, eyesVal);
+       
+         if (millis() > eyesMotorUntilTime)  {
+            digitalWrite(EYES_MOTOR, LOW);
+        }
     }
 }
 
@@ -354,6 +357,7 @@ int measureInches(pin_t trig_pin, pin_t echo_pin, uint32_t wait)
 ////////////////// RECORDING AUDIO ////////////////////
 
 void startRecording() {
+    
     if (!_isRecording) {
         _isRecording = true;
         readMicTimer.begin(readMic, AUDIO_TIMING_VAL, uSec);
@@ -365,6 +369,7 @@ void stopRecording() {
         _isRecording = false;
         readMicTimer.end();
         sendEnd();
+        
     }
 }
 
@@ -421,7 +426,6 @@ void playRxAudio() {
     unsigned long lastWrite = micros();
 	unsigned long now, diff;
 	
-
     int value = 0;
 
     while (recv_buffer.getSize() > 0) {
@@ -429,7 +433,6 @@ void playRxAudio() {
 
         //play audio
         value = recv_buffer.get();
-        //value*=20;
         value = map(value, 50,  255, 0, 4095);
 
         now = micros();
@@ -442,8 +445,6 @@ void playRxAudio() {
         lastWrite = micros();
     }
     
-
-
     _isPlayback = false;
     
 }
@@ -454,43 +455,10 @@ void readAndPlay() {
     }
     
     playRxAudio();
-
-}
-
-
-int BitShiftCombine( uint8_t x_high, uint8_t x_low)
-{
-    int combined = 0; 
-    combined = x_high; //send x_high to rightmost 8 bits
-    combined = combined<<8; //shift x_high over to leftmost 8 bits
-    combined |= x_low; //logical OR keeps x_high intact in combined and fills in rightmost 8 bits
-    
-    return combined;
-}
-
-void write_socket(TCPClient socket, uint8_t *buffer, int count) {
-    socket.write(buffer, count);
-}
-
-// http://neyric.com/2006/10/14/decoding-mu-law-audio-stream-to-pcm/#.WAznF4WcH9Q
-unsigned short mulaw_decode(unsigned char mulaw) {
-  mulaw = ~mulaw;
-  int sign = mulaw & 0x80;
-  int exponent = (mulaw & 0x70) >> 4;
-  int data = mulaw & 0x0f;
-  data |= 0x10;
-  data <<= 1;
-  data += 1;
-  data <<= exponent + 2;
-  data -= 0x84;
-  return (short)(sign == 0 ? data : -data);
-}
-
-unsigned short signed_pcm_to_dac(unsigned short pcm) {
-    return map(pcm, -2^15, 2^15 -1 , 0, 4095);
 }
 
 bool verifyConnected() {
+    
     if (_isDriving) return false;
     
     unsigned int now = millis();
@@ -498,13 +466,14 @@ bool verifyConnected() {
         lastClientCheck = now;
 
         if (client.connected()) {
+
             _isConnected = true;
+
         }
         else {
             _isConnected = client.connect(serverHost, serverPort);
         }
-    }
+    } 
     
     return _isConnected;
 }
-
