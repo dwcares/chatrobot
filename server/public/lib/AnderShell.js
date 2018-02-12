@@ -118,7 +118,7 @@
 
   function print(input, lp, autoWrap) {
     update(); 
-    if (autoWrap && input.length > autoWrap) input = input.substr(0, autoWrap -1) + '\n' + input.substr(autoWrap, input.length -1);
+    if (autoWrap && input.length > autoWrap && input.indexOf('\n')>autoWrap) input = input.substr(0, autoWrap -1) + '\n' + input.substr(autoWrap, input.length -1);
     _obuffer = _obuffer.concat(lp ? [input] : input.split(''));
   }
 
