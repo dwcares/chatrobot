@@ -16,11 +16,20 @@ let chatrobot = new ChatRobot({
 	username: process.env.PARTICLE_USERNAME,
 	password: process.env.PARTICLE_PASSWORD
 },
+	{
+		key: process.env.MICROSOFT_SPEECH_API_KEY,
+		gender: 'female'
+	},
 	process.env.CHATBOT_HOST,
 	process.env.CHATBOT_PORT
 )
 
-const chatrobotBehaviorManager = new ChatRobotBehaviorManager(chatrobot)
+const chatrobotBehaviorManager = new ChatRobotBehaviorManager(
+	chatrobot, {
+		appId: process.env.MICROSOFT_LUIS_APPID,
+		appKey: process.env.MICROSOFT_LUIS_KEY,
+		verbose: true
+	})
 
 chatrobotBehaviorManager.on('info', console.log)
 chatrobotBehaviorManager.on('status', console.log)
@@ -79,7 +88,6 @@ chatrobotBehaviorManager.addCustom('Melody', async function (entities) {
 		default:
 			break
 	}
-
 
 	await this._chatrobot.speak(phrase)
 

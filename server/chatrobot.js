@@ -9,12 +9,13 @@ const os = require('os')
 const EventEmitter = require('events').EventEmitter
 
 class ChatRobot extends EventEmitter {
-    constructor(deviceInfo, serverHost, serverPort = 5000) {
+    constructor(deviceInfo, speechInfo, serverHost, serverPort = 5000) {
         super()
 
         this._serverHost = serverHost
         this._serverPort = serverPort
         this._deviceInfo = deviceInfo
+        this._speechInfo = speechInfo
         this._speech = new Speech()
 
         this.statusCode = {
@@ -51,7 +52,7 @@ class ChatRobot extends EventEmitter {
 
             await this._listenForPhoton()
             await this._startStreamingServer()
-            await this._speech.getSpeechAccessToken(process.env.MICROSOFT_SPEECH_API_KEY)
+            await this._speech.getSpeechAccessToken(this._speechInfo.key)
         
         } catch(e) {
             this.emit('error', `Chatbot start error: ${e}`)
@@ -59,7 +60,7 @@ class ChatRobot extends EventEmitter {
     }
     async speak(utterance) {
         this.emit('info', `Speaking: ${utterance}`)
-        const audio = await this._speech.textToSpeech(utterance)
+        const audio = await this._speech.textToSpeech(utterance, this._speechInfo.gender)
         await this.play(audio)
     }
     play(audio) {

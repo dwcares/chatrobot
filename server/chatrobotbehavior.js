@@ -36,16 +36,12 @@ class ChatRobotBehaviorCollection extends Array {
 }
 
 class ChatRobotBehaviorManager extends EventEmitter {
-    constructor(chatrobot) {
+    constructor(chatrobot, luisInfo) {
         super()
 
         this._chatrobot = chatrobot
         this._behaviors = new ChatRobotBehaviorCollection()
-        this._luis = new LUISClient({
-            appId: process.env.MICROSOFT_LUIS_APPID,
-            appKey: process.env.MICROSOFT_LUIS_KEY,
-            verbose: true
-        })
+        this._luis = new LUISClient(luisInfo)
 
         this._chatrobot.on('message', async (utterance) => {
 

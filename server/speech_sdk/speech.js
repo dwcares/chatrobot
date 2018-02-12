@@ -14,9 +14,9 @@ class Speech {
         this.STTsampleRate = 16000;
     }
     getSpeechAccessToken(key) {
-        if (!key) 
-            throw new Error("Speech API Error: API Key is required"); 
-        
+        if (!key)
+            throw new Error("Speech API Error: API Key is required");
+
         return request.post({
             url: 'https://api.cognitive.microsoft.com/sts/v1.0/issueToken',
             headers: {
@@ -29,15 +29,22 @@ class Speech {
             return accessToken;
         })
     }
-    textToSpeech(text, useMaleVoice) {
-        if (!this.accessToken) 
-            throw new Error("Speech API Error:  Needs access token. Call GetAccessToken() first"); 
+    textToSpeech(text, gender) {
+        if (!this.accessToken)
+            throw new Error("Speech API Error:  Needs access token. Call GetAccessToken() first");
 
-        var ssmlPayload = "<speak version='1.0' xml:lang='en-us'><voice xml:lang='en-US' xml:gender='Female' name='Microsoft Server Speech Text to Speech Voice (en-US, ZiraRUS)'>" + text + "</voice></speak>";
-        if (useMaleVoice) {
-            ssmlPayload = "<speak version='1.0' xml:lang='en-us'><voice xml:lang='en-US' xml:gender='Male' name='Microsoft Server Speech Text to Speech Voice (en-US, BenjaminRUS)'>" + text + "</voice></speak>";
+        var ssmlPayload;
+
+        switch (gender) {
+            case 'male':
+                ssmlPayload = "<speak version='1.0' xml:lang='en-us'><voice xml:lang='en-US' xml:gender='Male' name='Microsoft Server Speech Text to Speech Voice (en-US, BenjaminRUS)'>" + text + "</voice></speak>"
+                break
+            case 'female':
+            default:
+                ssmlPayload = "<speak version='1.0' xml:lang='en-us'><voice xml:lang='en-US' xml:gender='Female' name='Microsoft Server Speech Text to Speech Voice (en-US, ZiraRUS)'>" + text + "</voice></speak>";
+                break
         }
-    
+
         return request.post({
             url: 'https://speech.platform.bing.com/synthesize',
             body: ssmlPayload,
@@ -50,11 +57,11 @@ class Speech {
                 'X-Search-ClientID': this.appid,
                 'User-Agent': this.userAgent
             }
-        });  
+        });
     }
     speechToText(waveData, verboseOutput) {
-        if (!this.accessToken) 
-            throw new Error("Speech API Error:  Needs access token. Call GetAccessToken() first"); 
+        if (!this.accessToken)
+            throw new Error("Speech API Error:  Needs access token. Call GetAccessToken() first");
 
         return request.post({
             url: 'https://speech.platform.bing.com/recognize',
@@ -79,8 +86,8 @@ class Speech {
             result = JSON.parse(result)
 
             if (result.header.status === 'success') {
-                recognizedText = verboseOutput ?  result :
-                result.header.name
+                recognizedText = verboseOutput ? result :
+                    result.header.name
             }
 
             return recognizedText
