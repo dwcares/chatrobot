@@ -1,5 +1,5 @@
 const fs = require('fs-extra')
-// const Shell = require('./shell')
+const Shell = require('./shell')
 const ChatRobot = require('./chatrobot')
 const {
 	ChatRobotBehavior,
@@ -31,9 +31,9 @@ const chatrobotBehaviorManager = new ChatRobotBehaviorManager(
 		verbose: true
 	})
 
-chatrobotBehaviorManager.on('info', console.log)
-chatrobotBehaviorManager.on('status', console.log)
-chatrobotBehaviorManager.on('error', console.log)
+chatrobotBehaviorManager.on('info', Shell.log)
+chatrobotBehaviorManager.on('status', Shell.log)
+chatrobotBehaviorManager.on('error', Shell.log)
 
 
 chatrobotBehaviorManager.addDefaultReply(`Sorry Dave, I can't do that`)
@@ -103,14 +103,14 @@ chatrobotBehaviorManager.addCustom(`Sing`, async function () {
 })
 
 
-// Shell.events.on('connection', function () {
+Shell.events.on('connection', function () {
 
-// })
+})
 
-// Shell.events.on('speak', async (message) => {
+Shell.events.on('speak', async (message) => {
 
-// 	const audio = await speech.textToSpeech(message)
-// 	chatrobot.play(audio)
-// })
+	const audio = await speech.textToSpeech(message)
+	chatrobot.play(audio)
+})
 
 chatrobotBehaviorManager.start()

@@ -313,7 +313,10 @@ class ChatRobot extends EventEmitter {
             var throttle = new Throttle({ bps: 16 * 1024, chunkSize: 16, highWaterMark: 500 })
 
             var stream = readableStream.pipe(pcmTransform).pipe(throttle)
-            stream.pipe(sock, { end: false })
+
+            stream.pipe(sock, { end: false }).on('error', (err) => {
+                this.emit('error', `Streaming Error: ${err}`)
+            })
         
             stream.on(`finish`, () => {
                 resolve()
