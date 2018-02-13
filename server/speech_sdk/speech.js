@@ -8,14 +8,18 @@ const uuid = require('uuid');
 class Speech {
     constructor() {
         this.accessToken;
+        this.accessTokenExpiry;
         this.appid = '68AE0F3ADB0C427B935F34E68C579FBE';
         this.userAgent = 'Chat Robot';
         this.TTSoutputFormat = 'raw-16khz-16bit-mono-pcm';
         this.STTsampleRate = 16000;
     }
-    getSpeechAccessToken(key) {
+    getSpeechAccessToken(key, forceUpdate) {
         if (!key)
             throw new Error("Speech API Error: API Key is required");
+
+        if (!forceUpdate && this.accessToken && this.accessTokenExpiry > Date.now())
+            return this.accessToken
 
         return request.post({
             url: 'https://api.cognitive.microsoft.com/sts/v1.0/issueToken',
@@ -25,13 +29,17 @@ class Speech {
                 'Ocp-Apim-Subscription-Key': key
             }
         }).then((accessToken) => {
+            this.accessTokenExpiry = Date.now() + 10*60*1000;
             this.accessToken = accessToken;
             return accessToken;
         })
     }
     textToSpeech(text, gender) {
-        if (!this.accessToken)
+        if (!this.accessToken) 
             throw new Error("Speech API Error:  Needs access token. Call GetAccessToken() first");
+       
+        if (this.accessTokenExpiry < Date.now())
+            throw new Error("Speech API Error:  Access token expired. Call GetAccessToken()");
 
         var ssmlPayload;
 
@@ -62,6 +70,10 @@ class Speech {
     speechToText(waveData, verboseOutput) {
         if (!this.accessToken)
             throw new Error("Speech API Error:  Needs access token. Call GetAccessToken() first");
+
+                   
+        if (this.accessTokenExpiry < Date.now())
+            throw new Error("Speech API Error:  Access token expired. Call GetAccessToken()");
 
         return request.post({
             url: 'https://speech.platform.bing.com/recognize',

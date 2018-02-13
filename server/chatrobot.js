@@ -60,6 +60,7 @@ class ChatRobot extends EventEmitter {
     }
     async speak(utterance) {
         this.emit('info', `Speaking: ${utterance}`)
+        await this._speech.getSpeechAccessToken(this._speechInfo.key)
         const audio = await this._speech.textToSpeech(utterance, this._speechInfo.gender)
         await this.play(audio)
     }
@@ -236,6 +237,8 @@ class ChatRobot extends EventEmitter {
 
                 if (audio) {
                     this.emit('audioMessage', audio)
+
+                    await this._speech.getSpeechAccessToken(this._speechInfo.key)
 
                     const utterance = await this._speech.speechToText(audio)
                     this.emit('message' , utterance)

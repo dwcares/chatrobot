@@ -109,8 +109,7 @@ Shell.events.on('connection', function () {
 
 Shell.events.on('speak', async (message) => {
 
-	const audio = await speech.textToSpeech(message)
-	chatrobot.play(audio)
+	const audio = await chatrobot.speak(message)
 })
 
 chatrobotBehaviorManager.start()
