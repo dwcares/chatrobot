@@ -148,14 +148,11 @@
   }
 
 
-  window.onload = function() {
+  function init() {
     $output = document.getElementById("output");
     $output.contentEditable = false;
     $output.spellcheck = false;
     $output.value = '';
-
-    print('> ');
-
     
     $output.onkeydown = function(ev) {
       var k = ev.which || ev.keyCode;

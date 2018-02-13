@@ -14,7 +14,7 @@ app.get('/', function(req, res) {
 });
 
 var log = function(message, noReturn) {
-    if (!noReturn) {
+    if (!noReturn && message) {
         if (!message.toString().startsWith('*')) console.log('Shell> ' + message);		
         message = message + "\n\n";
     }

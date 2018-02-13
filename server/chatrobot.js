@@ -157,7 +157,7 @@ class ChatRobot extends EventEmitter {
             })
             .catch((err) => { console.error(`Particle 'updatePhotonWithHost': ${err}`) })
 
-            this.emit('info',`Updated streaming client with server: ${this._serverHost}:${this._serverPort}`)
+            this.emit('info',`Updated client with streaming server host`)
     }
 
     _getWifiAddress() {
@@ -186,8 +186,8 @@ class ChatRobot extends EventEmitter {
     async _startStreamingServer() {
         return new Promise(async (resolve, reject) => {
             net.createServer((sock) => {
-                this.emit('info', `Streaming client connected ${sock.remoteAddress}:${sock.remotePort}`)
-
+                this.emit('info',`Streaming client connected`)
+                
                 this._streamingInfo.isConnected = true
                 sock.setKeepAlive(true, 1000)
 
@@ -221,8 +221,9 @@ class ChatRobot extends EventEmitter {
                 
                 this._listenForAudio()
 
-                this.emit('status', this.statusCode.CHATBOT_READY)
                 this.emit('info', 'Chatbot ready!')
+
+                this.emit('status', this.statusCode.CHATBOT_READY)
                 resolve(sock)
             }).listen(this._serverPort)
 
@@ -248,7 +249,7 @@ class ChatRobot extends EventEmitter {
                     }
                 }
             } catch (e) {
-                this.emit('error', `Audio streaming error ${e}`)
+                console.log(`Audio streaming error ${e}`)
             }
         })
     }

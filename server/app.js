@@ -31,10 +31,16 @@ const chatrobotBehaviorManager = new ChatRobotBehaviorManager(
 		verbose: true
 	})
 
-chatrobotBehaviorManager.on('info', Shell.log)
-chatrobotBehaviorManager.on('status', Shell.log)
-chatrobotBehaviorManager.on('error', Shell.log)
 
+chatrobotBehaviorManager.on('error', console.log)
+chatrobotBehaviorManager.on('info', Shell.log)
+chatrobotBehaviorManager.on('command', () => Shell.log('*prompt'))
+chatrobotBehaviorManager.on('status', (status => {
+	console.log('STATUS: ' + status)
+
+	if (status == chatrobot.statusCode.CHATBOT_READY)
+		Shell.log('*prompt')
+}))
 
 chatrobotBehaviorManager.addDefaultReply(`Sorry Dave, I can't do that`)
 chatrobotBehaviorManager.addErrorReply(`Huh?`)
@@ -104,12 +110,13 @@ chatrobotBehaviorManager.addCustom(`Sing`, async function () {
 
 
 Shell.events.on('connection', function () {
-
 })
 
 Shell.events.on('speak', async (message) => {
 
-	const audio = await chatrobot.speak(message)
+	await chatrobot.speak(message)
+
+	Shell.log('*prompt')
 })
 
 chatrobotBehaviorManager.start()

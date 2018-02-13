@@ -54,8 +54,11 @@ class ChatRobotBehaviorManager extends EventEmitter {
                 behavior = behavior ? behavior : this._defaultBehavior
 
                 await behavior.run(response.entities)
+                this.emit('command', 'BEHAVIOR: ' + behavior._token)
+
             } else {
                 await this._errorBehavior.run()
+                this.emit('command', 'ERROR BEHAVIOR')
             }
         })
 
