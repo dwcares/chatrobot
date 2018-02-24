@@ -59,6 +59,11 @@ class ChatRobot extends EventEmitter {
         }
     }
     async speak(utterance) {
+        if (!this._streamingInfo.isConnected) {
+            this.emit('error', 'Must be connected to streaming server to speak')
+            return
+        }
+
         this.emit('info', `Speaking: ${utterance}`)
         await this._speech.getSpeechAccessToken(this._speechInfo.key)
         const audio = await this._speech.textToSpeech(utterance, this._speechInfo.gender)
@@ -66,13 +71,18 @@ class ChatRobot extends EventEmitter {
     }
     play(audio) {
         if (!this._streamingInfo.isConnected) {
-            this.error('error', 'Must be connected to streaming server to play audio')
+            this.emit('error', 'Must be connected to streaming server to play audio')
             return
         }
 
         return this._streamAudioOut(this._streamingInfo.sock, audio)
     }
     async playTone(tone) {
+        if (!this._streamingInfo.isConnected) {
+            this.emit('error', 'Must be connected to streaming server to play tone')
+            return
+        }
+
         this.emit('info', `Playing tone: ${tone}`)
 
         await this._particle.callFunction({
@@ -84,6 +94,11 @@ class ChatRobot extends EventEmitter {
         })
     }
     async drive(seconds) {
+        if (!this._streamingInfo.isConnected) {
+            this.emit('error', 'Must be connected to streaming server to drive')
+            return
+        }
+
         await this._particle.callFunction({
             deviceId: this._deviceInfo.deviceId,
             name: 'drive', argument: '' + seconds,
