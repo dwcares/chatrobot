@@ -1,7 +1,5 @@
 const LUISClient = require('./luis_sdk')
-const EventEmitter = require("events").EventEmitter
-
-
+const EventEmitter = require('events').EventEmitter
 
 class ChatRobotBehavior {
     constructor(token, behaviorHandler) {
@@ -19,9 +17,8 @@ class ChatRobotBehaviorCollection extends Array {
         this._token = token
     }
     lookup(token) {
-        return this.find(function (element) {
-            return element._token === token;
-        })
+        let behaviors = this.filter(element => element._token === token)
+        return behaviors[Math.floor(Math.random()*behaviors.length)];
     }
     async _behaviorHandler(chatrobot, entities) {
         for (const i = 0; i < this.length; i++) {
