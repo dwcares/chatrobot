@@ -1,0 +1,48 @@
+[{
+    "token": `Greeting`,
+    "phrases": [
+        `Hello friend!`,
+        `Hey!`,
+        `Howdy`,
+        `Whats up`,
+        `Hola`,
+        `Sup!`,
+        `Yo!`,
+        `What's up`,
+        `Hi`,
+        `Hey y'all`,
+        `Greetings!`,
+        `Hey dude`
+    ]
+},
+{
+    "token": 'Greeting.HowAreYou',
+    "phrases": [
+        `Hi, I'm doing great!`
+    ]
+},
+{   
+    "token": `Name`,
+    "phrases": [
+        `My name is Chat Bot.`
+    ]
+},
+{   
+    "token": `Laws`,
+    "phrases": [
+        `A robot may not injure a human being, or, through inaction, allow a human being to come to harm.`
+    ]
+},
+{   
+    "token": `Birthday`,
+    "phrases": [
+        `I was born November 7th, 1985 in Katsushika Tokyo.` 
+    ]
+},
+{   
+    "token": `Joke`,
+    "phrases": [
+        `Why was the robot angry? Because someone kept pushing his buttons!`,
+        `Did I ever tell you about the worst taco I ever ate? ... It was great!`
+    ]
+}]

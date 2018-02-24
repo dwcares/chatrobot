@@ -33,25 +33,9 @@ const chatrobotBehaviorManager = new ChatRobotBehaviorManager(
 	})
 
 
-chatrobotBehaviorManager.on('error', console.log)
-chatrobotBehaviorManager.on('info', Shell.log)
-chatrobotBehaviorManager.on('command', () => Shell.log('*prompt'))
-chatrobotBehaviorManager.on('status', (status => {
-	console.log('STATUS: ' + status)
-
-	if (status == chatrobot.statusCode.CHATBOT_READY)
-		Shell.log('*prompt')
-}))
-
+chatrobotBehaviorManager.addPhraseList('./chatrobotphraselist.hson')
 chatrobotBehaviorManager.addDefaultReply(`Sorry Dave, I can't do that`)
 chatrobotBehaviorManager.addErrorReply(`Huh?`)
-chatrobotBehaviorManager.addReply(`Greeting`, `Hello friend!`)
-chatrobotBehaviorManager.addReply(`Greeting.HowAreYou`, `Hi, I'm doing great!`)
-chatrobotBehaviorManager.addReply(`Name`, `My name is Chat Bot.`)
-chatrobotBehaviorManager.addReply(`Laws`, `A robot may not injure a human being, or, through inaction, allow a human being to come to harm.`)
-chatrobotBehaviorManager.addReply(`Birthday`, `I was born November 7th, 1985 in Katsushika Tokyo.`)
-chatrobotBehaviorManager.addReply(`Joke`, `Why was the robot angry? Because someone kept pushing his buttons!`)
-chatrobotBehaviorManager.addReply(`Joke`, `Did I ever tell you about the worst taco I ever ate? ... It was great!`)
 
 chatrobotBehaviorManager.addCustom(`Weather.GetCondition`, async function (entities) {
 	const result = await Weather.current_weather()
@@ -108,14 +92,21 @@ chatrobotBehaviorManager.addCustom(`Sing`, async function () {
 	await this._chatrobot.play(songStream)
 })
 
+chatrobotBehaviorManager.on('error', console.log)
+chatrobotBehaviorManager.on('info', Shell.log)
+chatrobotBehaviorManager.on('command', () => Shell.log('*prompt'))
+chatrobotBehaviorManager.on('status', (status => {
+	console.log('STATUS: ' + status)
+
+	if (status == chatrobot.statusCode.CHATBOT_READY)
+		Shell.log('*prompt')
+}))
 
 Shell.events.on('connection', function () {
 })
 
 Shell.events.on('speak', async (message) => {
-
 	await chatrobot.speak(message)
-
 	Shell.log('*prompt')
 })
 

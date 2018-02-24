@@ -211,7 +211,6 @@ class ChatRobot extends EventEmitter {
                     this._streamingInfo.isConnected = false
                     this.emit('status', this.statusCode.STREAM_DISCONNECTED)
 
-
                     sock.removeAllListeners()
                     sock.end()
                     sock.destroy()

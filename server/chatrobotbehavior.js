@@ -1,5 +1,7 @@
 const LUISClient = require('./luis_sdk')
 const EventEmitter = require('events').EventEmitter
+const fs = require('fs-extra')
+var hanson = require('hanson');
 
 class ChatRobotBehavior {
     constructor(token, behaviorHandler) {
@@ -80,9 +82,21 @@ class ChatRobotBehaviorManager extends EventEmitter {
         this.add(behavior)
     }
     addReply(token, response) {
+
         this.addCustom(token, async function(utterance) {
             await this._chatrobot.speak(response)
         })
+    }
+    async addPhraseList(path) {
+        let phraseListText = await fs.readFile(path)
+        phraseListText = `{"phrases": ${phraseListText}}`
+        const phraseList = hanson.parse(phraseListText).phrases
+
+        for (let i = 0; i < phraseList.length; i++) {
+            for (let j = 0; j < phraseList[i].phrases.length; j++) {
+                this.addReply(phraseList[i].token, phraseList[i].phrases[j])
+            }
+        }
     }
     addDefaultReply(response) {
         this._defaultBehavior = new ChatRobotBehavior(null, 
