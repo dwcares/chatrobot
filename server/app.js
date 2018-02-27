@@ -64,7 +64,7 @@ chatrobotBehaviorManager.addCustom('Melody', async function (entities) {
 	let phrase = `Ok!`
 	let melody = `4C6;260`
 
-	let entity = entities[0] ? entities[0].resolution.values[0] : null;
+	let entity = entities[0] && entities[0].type === 'Song' ? entities[0].resolution.values[0] : null;
 
 	switch (entity) {
 		case 'twinkle, twinkle':
@@ -101,6 +101,15 @@ chatrobotBehaviorManager.on('status', (status => {
 	if (status == chatrobot.statusCode.CHATBOT_READY)
 		Shell.log('*prompt')
 }))
+
+setTimeout(() => {
+	for (let i =0; i <100; i++ ) {
+		chatrobotBehaviorManager._behaviors.lookup('Birthday')
+	}
+}, 1000)
+
+
+
 
 Shell.events.on('connection', function () {
 })

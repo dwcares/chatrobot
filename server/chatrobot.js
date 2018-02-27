@@ -156,6 +156,10 @@ class ChatRobot extends EventEmitter {
                 this.emit('status', this.statusCode.DEVICE_OFFLINE)
             }
         })
+
+        stream.on('error', (msg) => {
+            this.emit('info','Particle event streaming error')
+        })
     }
 
     async _updatePhotonWithHost() {

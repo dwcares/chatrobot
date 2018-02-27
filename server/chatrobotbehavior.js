@@ -15,12 +15,9 @@ class ChatRobotBehavior {
 
 class ChatRobotBehaviorCollection extends Array {
     constructor(token, ...args) {
-        super(...args);
+        super(...args)
         this._token = token
-    }
-    lookup(token) {
-        let behaviors = this.filter(element => element._token === token)
-        return behaviors[Math.floor(Math.random()*behaviors.length)];
+        this._lastBehaviorIndex = 0
     }
     async _behaviorHandler(chatrobot, entities) {
         for (const i = 0; i < this.length; i++) {
@@ -28,6 +25,19 @@ class ChatRobotBehaviorCollection extends Array {
             if (typeof this[i] === 'ChatRobotBehaviorHandler')
                 await this[i]._behaviorHandler(chatrobot, entities)
         }
+    }
+    lookup(token) {
+        const behaviors = this.filter(element => element._token === token)
+        let selectedIndex = Math.floor(Math.random()*behaviors.length)
+
+        // don't repeat behaviors in collection
+        while (behaviors.length > 1 && selectedIndex === this._lastBehaviorIndex) {
+            selectedIndex = Math.floor(Math.random()*behaviors.length)
+        }
+
+        this._lastBehaviorIndex = selectedIndex
+
+        return behaviors[selectedIndex];
     }
     async run(entities) {
         await this._behaviorHandler(this._chatrobot, entities)
