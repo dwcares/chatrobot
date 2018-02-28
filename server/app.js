@@ -102,15 +102,6 @@ chatrobotBehaviorManager.on('status', (status => {
 		Shell.log('*prompt')
 }))
 
-setTimeout(() => {
-	for (let i =0; i <100; i++ ) {
-		chatrobotBehaviorManager._behaviors.lookup('Birthday')
-	}
-}, 1000)
-
-
-
-
 Shell.events.on('connection', function () {
 })
 
