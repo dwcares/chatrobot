@@ -38,16 +38,38 @@ chatrobotBehaviorManager.addDefaultReply(`Sorry Dave, I can't do that`)
 chatrobotBehaviorManager.addErrorReply(`Huh?`)
 
 chatrobotBehaviorManager.addCustom(`Weather.GetCondition`, async function (entities) {
-	const result = await Weather.current_weather()
-	const currentWeather = `It's ${result.weather[0].description} and the current temp is ${parseInt(1.8 * (result.main.temp - 273) + 32)} degrees!`
-	await this._chatrobot.speak(currentWeather)
+	const location = entities &&
+		entities[0] &&
+		entities[0].type === 'Weather.Location' ? entities[0].entity : 'Minneapolis'
+
+	const result = await Weather.get_weather_custom('city', location, 'weather')
+
+	if (result.weather) {
+		const currentWeather = `In ${result.name}, there is ${result.weather[0].description} and the current temp is ${parseInt(1.8 * (result.main.temp - 273) + 32)} degrees!`
+		await this._chatrobot.speak(currentWeather)
+	} else {
+		await this._chatrobot.speak(`I'm not sure`)
+	}
+
 })
 
 chatrobotBehaviorManager.addCustom(`Weather.GetForecast`, async function (entities) {
-	const result = await Weather.forecast_weather()
-	let forecastWeather = `Tomorow it will be ${result[4].weather[0].description} and ${parseInt(1.8 * (result[4].main.temp - 273) + 32)} degrees at ${(new Date(result[4].dt_txt)).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })}`
-	forecastWeather += `, and ${result[7].weather[0].description} and ${parseInt(1.8 * (result[7].main.temp - 273) + 32)} degrees at ${(new Date(result[7].dt_txt)).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })}`
-	await this._chatrobot.speak(forecastWeather)
+
+	const location = entities &&
+	entities[0] &&
+	entities[0].type === 'Weather.Location' ? entities[0].entity : 'Minneapolis'
+
+	const result = await Weather.get_weather_custom('city', location, 'forecast')
+
+	if (result[4]) {
+		let forecastWeather = `Tomorow in ${location}, there will be ${result[4].weather[0].description} and ${parseInt(1.8 * (result[4].main.temp - 273) + 32)} degrees at ${(new Date(result[4].dt_txt)).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })}`
+		forecastWeather += `, and ${result[7].weather[0].description} and ${parseInt(1.8 * (result[7].main.temp - 273) + 32)} degrees at ${(new Date(result[7].dt_txt)).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })}`
+		await this._chatrobot.speak(forecastWeather)
+	} else {
+		await this._chatrobot.speak(`I'm not sure`)
+	}
+
+
 })
 
 chatrobotBehaviorManager.addCustom(`Drive`, async function (entities) {

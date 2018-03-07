@@ -108,13 +108,13 @@ class ChatRobot extends EventEmitter {
         })
 
     }
-    async spinEyes(seconds) {
+    async spinEyes(seconds,speed) {
         await this._particle.callFunction({
             deviceId: this._deviceInfo.deviceId,
-            name: 'eyeMotor', argument: '' + seconds,
+            name: 'eyesSpin', argument: '' + seconds + ';' + speed,
             auth: this._deviceInfo.authToken
         }).catch(err => {
-            console.error(`PARTICLE ERROR: 'eyeMotor': ${err}`)
+            console.error(`PARTICLE ERROR: 'eyesSpin': ${err}`)
         })
     }
 
@@ -255,6 +255,7 @@ class ChatRobot extends EventEmitter {
                 const audio = await this._saveIncomingAudio(data)
 
                 if (audio) {
+                    this.spinEyes(1,6);
                     this.emit('audioMessage', audio)
 
                     await this._speech.getSpeechAccessToken(this._speechInfo.key)
