@@ -1,17 +1,18 @@
 # Chat Robot Components
 
 ### Button
-* D0
+* D3
 * GND
 
 ### Motor
-* D1 (rev)
-* D2 (fwd)
+* D1 (fwd)
+* D2 (rev)
 * GND
 * 9V
 
-### Eyes Motor 
-* D3
+### Eyes Continuous Servo 
+* D0
+* VCC
 * GND
 
 ### Ping Sensor
