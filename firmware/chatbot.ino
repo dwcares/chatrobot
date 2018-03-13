@@ -117,12 +117,9 @@ void setup() {
 }
 
 void loop() {
-
-
     updateRecordAndPlay();
     updateEyes();
     updateDriveDistance();
-    
 }
 
 /////////////// MAIN RECORD LOOP //////////////
@@ -159,9 +156,8 @@ void checkWifiConfig() {
         Particle.connect();
 
         eyeMax = 800;
-        
-        // loadStateFromEEPROM();
 
+        loadStateFromEEPROM();
     }
 }
 
@@ -183,32 +179,40 @@ int updateServer(String server) {
     serverHost = host;
     serverPort = port.toInt();
     
-    //saveStateToEEPROM();
+    saveStateToEEPROM();
    return 0;
 }
 
 void loadStateFromEEPROM () {
+    char serverHostBuf[20];
      
     EEPROM.get(0, serverPort);
     if(serverPort == 0) {
       serverPort = 80;
     }
     
-    EEPROM.get(40, serverHost);
-    if(serverHost == "") {
-      serverHost = "192.168.1.99";
-    }
+    EEPROM.get(40, serverHostBuf);
+    serverHost = serverHostBuf;
     
-    Serial.println("State loaded from EEPROM: " + serverHost + ":" + serverPort);
+    Serial.print("Loaded host from EEPROM: ");
+    Serial.print(serverHost);
+    Serial.print(":");
+    Serial.println(serverPort);
 }
 
 void saveStateToEEPROM () {
-    EEPROM.put(0, serverPort);
-    EEPROM.put(40, serverHost);
+    EEPROM.clear();
     
-    Serial.println("State saved to EEPROM: " + serverHost + ":" + serverPort);
+    char serverHostBuf[20];
+    serverHost.toCharArray(serverHostBuf, 20);
+    EEPROM.put(0, serverPort);
+    EEPROM.put(40, serverHostBuf);
+    
+    Serial.print("Saved host to EEPROM: ");
+    Serial.print(serverHost);
+    Serial.print(":");
+    Serial.println(serverPort);
 }
-
 ////////////////// MOTORS AND EYES AND TONES //////////////////
 
 void updateDriveDistance() {
