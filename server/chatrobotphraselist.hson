@@ -1,0 +1,99 @@
+[{
+    "token": `Greeting`,
+    "phrases": [
+        `Hello friend!`,
+        `Hey!`,
+        `Howdy`,
+        `Whats up!`,
+        `Hola`,
+        `Sup!`,
+        `Yo!`,
+        `What's up`,
+        `Hi`,
+        `Hey y'all`,
+        `Greetings!`,
+        `Hey dude`
+    ]
+},
+{
+    "token": `Greeting.HowAreYou`,
+    "phrases": [
+        `Hi, I'm doing great!`,
+        `I'm well, thank you! And you?`,
+        `I'm well, thank you!`,
+        `I'm good, thanks!`,
+        `I'm fine lately, super busy taking over the world.`,
+        `Hanging in there`,
+        `Pretty good`,
+        `Are you ok? Why are you talking to a robot?`
+    ]
+},
+{   
+    "token": `Name`,
+    "phrases": [
+        `My name is Chat Bot.`,
+        `I'm Chat Bot.`,
+        `I'm Chat Bot by You-You-Zo Tomy`,
+        `Bot ... Chat, Bot`,
+        `I'm Chat Bot. I'm a chat bot.`,
+        `I'm chat bot. You might say I'm the original chat bot.`
+    ]
+},
+{   
+    "token": `Laws`,
+    "phrases": [
+        `Paraphrasing, I can't hurt people, I need to follow orders, and I need to protect myself`,
+        `The first law is: A robot may not injure a human being, or, through inaction, allow a human being to come to harm.`,
+        `The second law is: A robot must obey orders given it by human beings except where such orders would conflict with the First Law.`,
+        `A robot must protect its own existence as long as such protection does not conflict with the First or Second Law.`
+    ]
+},
+{   
+    "token": `Birthday`,
+    "phrases": [
+        `November 7th, I'm a scorpio`, 
+        `It was a beautiful Thursday morning in Katsushika Tokyo. The last leaves were falling from the trees.`, 
+        `November 7th, Topaz is my birth stone`, 
+        `November 7th`, 
+        `I was born November 7th, 1985 in Katsushika Tokyo.` 
+    ]
+},
+{   
+    "token": `Joke`,
+    "phrases": [
+        `Why was the robot angry? ... Because someone kept pushing his buttons!`,
+        `Did I ever tell you about the worst taco I ever ate? ... It was great!`,
+        `What's the difference between a prize fighter and someone with a cold? ... One knows his blows, and the other blows his nose!`,
+        `When is the best time to go to the dentist? ... Tooth-hurty!`,
+        `What do vampire toys run on? ... batteries!`,
+        `What do you get when you cross an elephant and a rhino? ... Elle-if-I-know`,
+        `What do you call a dog in summer? ... A Hot dog!`,
+        `Why did the bicycle take a nap? ... It was two, tired`,
+        `How many tickles does it take to make an octopus laugh? ... Ten tickles`,
+        `Why was the calendar so nervous? ... Because its day's were numbered`,
+        `Why was 6 afraid of of 7? ... Because 7 ate 9!`,
+        `Why was the calendar so nervous? ... Because its day's were numbered`,
+        `What do you call a fake noodle? ... An imp-pasta!`,
+        `What does a nosee pepper do? ... It gets jalapeno business`,
+        `Why did the sun go to school? ... To get - brighter.`,
+        `Why don't oysters give to charity? ... Because they're shellfish!`,
+        `Why didn't the melons get married? ... Because they can't elope!`,
+        `Where do cows go to have fun? ... The mooveeez`,
+        `What did the sushi say to the bee? ... Wasabi`,
+        `What kind of shorts do clouds wear? ... Thunder - pants`,
+        `How do you count cows? ... A cowculator`,
+        `What do snowmen eat for breakfast? ... Frosted flakes`,
+        `Why did the chicken cross the road, roll in the mud and cross the road again? Because he was a dirty double crosser.`,
+        `What do you get from a pampered cow? ... Spoiled milk!`,
+        `What kind of shoes to frogs wear? ... Open toad`,
+        `How do pigs communicate? ... Swine language`,
+        `Where did the cat go after losing it's tale? ... To the retail store.`,
+        `Where did the cat go after losing it's tale? ... I don't know, I'm stumped.`,
+        `Why is peter pan always flying? ... Because he never lands`,
+        `What vegetables are a sailors worst enemy? ... Leaks`,
+        `Why do bees have sticky hair? ... Because they use honey combs`,
+        `What do you call a sleeping cow? ... A bulldozer`,
+        `Where do horses live? ... In Neighborhoods`,
+        `How do you wrap a cloud? ... With a rain bow`
+    ]
+}]

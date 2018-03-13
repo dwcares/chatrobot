@@ -1,7 +1,7 @@
 const LUISClient = require('./luis_sdk')
-const EventEmitter = require("events").EventEmitter
-
-
+const EventEmitter = require('events').EventEmitter
+const fs = require('fs-extra')
+var hanson = require('hanson');
 
 class ChatRobotBehavior {
     constructor(token, behaviorHandler) {
@@ -15,13 +15,9 @@ class ChatRobotBehavior {
 
 class ChatRobotBehaviorCollection extends Array {
     constructor(token, ...args) {
-        super(...args);
+        super(...args)
         this._token = token
-    }
-    lookup(token) {
-        return this.find(function (element) {
-            return element._token === token;
-        })
+        this._lastBehaviorIndex = 0
     }
     async _behaviorHandler(chatrobot, entities) {
         for (const i = 0; i < this.length; i++) {
@@ -29,6 +25,19 @@ class ChatRobotBehaviorCollection extends Array {
             if (typeof this[i] === 'ChatRobotBehaviorHandler')
                 await this[i]._behaviorHandler(chatrobot, entities)
         }
+    }
+    lookup(token) {
+        const behaviors = this.filter(element => element._token === token)
+        let selectedIndex = Math.floor(Math.random()*behaviors.length)
+
+        // don't repeat behaviors in collection
+        while (behaviors.length > 1 && selectedIndex === this._lastBehaviorIndex) {
+            selectedIndex = Math.floor(Math.random()*behaviors.length)
+        }
+
+        this._lastBehaviorIndex = selectedIndex
+
+        return behaviors[selectedIndex];
     }
     async run(entities) {
         await this._behaviorHandler(this._chatrobot, entities)
@@ -83,9 +92,21 @@ class ChatRobotBehaviorManager extends EventEmitter {
         this.add(behavior)
     }
     addReply(token, response) {
+
         this.addCustom(token, async function(utterance) {
             await this._chatrobot.speak(response)
         })
+    }
+    async addPhraseList(path) {
+        let phraseListText = await fs.readFile(path)
+        phraseListText = `{"phrases": ${phraseListText}}`
+        const phraseList = hanson.parse(phraseListText).phrases
+
+        for (let i = 0; i < phraseList.length; i++) {
+            for (let j = 0; j < phraseList[i].phrases.length; j++) {
+                this.addReply(phraseList[i].token, phraseList[i].phrases[j])
+            }
+        }
     }
     addDefaultReply(response) {
         this._defaultBehavior = new ChatRobotBehavior(null, 

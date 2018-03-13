@@ -5,13 +5,13 @@
 
 #define SERIAL_DEBUG_ON true
 
-#define MOTOR_REVERSE_PIN D1
-#define MOTOR_FORWARD_PIN D2
+#define MOTOR_FORWARD_PIN D1
+#define MOTOR_REVERSE_PIN D2
 #define DRIVE_UPDATE_FREQ 300
 #define PING_SENSOR_DELAY_MS 10
 
 #define EYES_LED A4
-#define EYES_MOTOR D3
+#define EYES_SERVO D0
 #define TRIG_PIN D4
 #define ECHO_PIN D5
 
@@ -26,7 +26,7 @@
 #define AUDIO_BUFFER_MAX 8192
 #define RECEIVE_BUFFER_MAX 32*1024
 
-#define BUTTON_PIN D0
+#define BUTTON_PIN D3
 #define SPEAKER_PIN A3
 
 #define TONE_PIN WKP
@@ -51,6 +51,8 @@ bool eyesBusy = false;
 unsigned int eyesVal = 0;
 int eyesDir = 1;
 unsigned int eyeMax = 200;
+Servo eyesServo;
+
 
 TCPClient client;
 IntervalTimer readMicTimer;
@@ -73,7 +75,7 @@ int currentDriveSpeed = 0;
 int currentDistance = 0;
 
 unsigned long driveUntilTime = millis();
-unsigned long eyesMotorUntilTime = millis();
+unsigned long eyesServoUntilTime = millis();
 
 void setup() {
     #if SERIAL_DEBUG_ON
@@ -83,7 +85,7 @@ void setup() {
     Particle.function("drive", drive);
     Particle.function("stop", stop);
     Particle.function("setMotor", setMotor);
-    Particle.function("eyeMotor" , eyeMotor);
+    Particle.function("eyesSpin" , eyesSpin);
     Particle.function("playTone", playTone);
     Particle.function("updateServer", updateServer);
     
@@ -91,11 +93,14 @@ void setup() {
     pinMode(MICROPHONE_PIN, INPUT);
     pinMode(SPEAKER_PIN, OUTPUT);
     pinMode(EYES_LED, OUTPUT);
-    pinMode(EYES_MOTOR, OUTPUT);
 
     pinMode(MOTOR_REVERSE_PIN, OUTPUT);
     pinMode(MOTOR_FORWARD_PIN, OUTPUT);
     setMotorSpeed(0);
+    
+    eyesServo.attach(EYES_SERVO);
+    eyesServo.write(0);  
+
     
     setADCSampleTime(ADC_SampleTime_3Cycles);
     recv_buffer.init(RECEIVE_BUFFER_MAX);
@@ -112,7 +117,8 @@ void setup() {
 }
 
 void loop() {
-    
+
+
     updateRecordAndPlay();
     updateEyes();
     updateDriveDistance();
@@ -124,14 +130,15 @@ void loop() {
 void updateRecordAndPlay() {
     verifyConnected();
     debouncer.update();
+    melodySpeaker.processMelody();
 
     // Record and send audio
     if (debouncer.read() == LOW && _isConnected) {
-        
+
         startRecording();
         sendEvery(100);
     }  else {
-        melodySpeaker.processMelody();
+
         stopRecording();
         
         if (_isConnected) {
@@ -158,18 +165,9 @@ void checkWifiConfig() {
     }
 }
 
-int eyeMotor(String args) {
-    
-    eyesMotorUntilTime = args.toInt()*1000 + millis();
-    digitalWrite(EYES_MOTOR, HIGH);
-
-    return 1;
-}
-
 int updateServer(String server) {
     Serial.println("server: " + server);
     int splitIndex = server.indexOf(":");
-        Serial.println("index: " + splitIndex);
 
     String host = "";
     String port = "";
@@ -321,10 +319,28 @@ void updateEyes() {
     
        analogWrite(EYES_LED, eyesVal);
        
-         if (millis() > eyesMotorUntilTime)  {
-            digitalWrite(EYES_MOTOR, LOW);
+         if (millis() > eyesServoUntilTime)  {
+          eyesServo.write(0);  
         }
     }
+}
+
+int eyesSpin(String args) {
+    
+     int speedIndex = args.lastIndexOf(';');
+     int speedVal = 10;
+    
+    if (speedIndex > 0) {
+        String speedStr = args.substring(speedIndex + 1);
+        speedVal = speedStr.toInt();
+
+        args = args.substring(0, speedIndex);
+    }
+
+    eyesServoUntilTime = args.toInt()*1000 + millis();
+    eyesServo.write(speedVal);  
+
+    return 1;
 }
 
 ////////////////// DISTANCE SENSOR ///////////////////
@@ -358,6 +374,7 @@ int measureInches(pin_t trig_pin, pin_t echo_pin, uint32_t wait)
 void startRecording() {
     
     if (!_isRecording) {
+        playTone("8b4");
         _isRecording = true;
         readMicTimer.begin(readMic, AUDIO_TIMING_VAL, uSec);
     }
@@ -365,6 +382,7 @@ void startRecording() {
 
 void stopRecording() {
     if (_isRecording) {
+        playTone("8b3");
         _isRecording = false;
         readMicTimer.end();
         sendEnd();

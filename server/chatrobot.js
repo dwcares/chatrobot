@@ -59,6 +59,11 @@ class ChatRobot extends EventEmitter {
         }
     }
     async speak(utterance) {
+        if (!this._streamingInfo.isConnected) {
+            this.emit('error', 'Must be connected to streaming server to speak')
+            return
+        }
+
         this.emit('info', `Speaking: ${utterance}`)
         await this._speech.getSpeechAccessToken(this._speechInfo.key)
         const audio = await this._speech.textToSpeech(utterance, this._speechInfo.gender)
@@ -66,13 +71,18 @@ class ChatRobot extends EventEmitter {
     }
     play(audio) {
         if (!this._streamingInfo.isConnected) {
-            this.error('error', 'Must be connected to streaming server to play audio')
+            this.emit('error', 'Must be connected to streaming server to play audio')
             return
         }
 
         return this._streamAudioOut(this._streamingInfo.sock, audio)
     }
     async playTone(tone) {
+        if (!this._streamingInfo.isConnected) {
+            this.emit('error', 'Must be connected to streaming server to play tone')
+            return
+        }
+
         this.emit('info', `Playing tone: ${tone}`)
 
         await this._particle.callFunction({
@@ -84,6 +94,11 @@ class ChatRobot extends EventEmitter {
         })
     }
     async drive(seconds) {
+        if (!this._streamingInfo.isConnected) {
+            this.emit('error', 'Must be connected to streaming server to drive')
+            return
+        }
+
         await this._particle.callFunction({
             deviceId: this._deviceInfo.deviceId,
             name: 'drive', argument: '' + seconds,
@@ -93,13 +108,13 @@ class ChatRobot extends EventEmitter {
         })
 
     }
-    async spinEyes(seconds) {
+    async spinEyes(seconds,speed) {
         await this._particle.callFunction({
             deviceId: this._deviceInfo.deviceId,
-            name: 'eyeMotor', argument: '' + seconds,
+            name: 'eyesSpin', argument: '' + seconds + ';' + speed,
             auth: this._deviceInfo.authToken
         }).catch(err => {
-            console.error(`PARTICLE ERROR: 'eyeMotor': ${err}`)
+            console.error(`PARTICLE ERROR: 'eyesSpin': ${err}`)
         })
     }
 
@@ -140,6 +155,10 @@ class ChatRobot extends EventEmitter {
                 this.emit('info','Chatbot offline')
                 this.emit('status', this.statusCode.DEVICE_OFFLINE)
             }
+        })
+
+        stream.on('error', (msg) => {
+            this.emit('info','Particle event streaming error')
         })
     }
 
@@ -196,7 +215,6 @@ class ChatRobot extends EventEmitter {
                     this._streamingInfo.isConnected = false
                     this.emit('status', this.statusCode.STREAM_DISCONNECTED)
 
-
                     sock.removeAllListeners()
                     sock.end()
                     sock.destroy()
@@ -237,6 +255,7 @@ class ChatRobot extends EventEmitter {
                 const audio = await this._saveIncomingAudio(data)
 
                 if (audio) {
+                    this.spinEyes(1,6);
                     this.emit('audioMessage', audio)
 
                     await this._speech.getSpeechAccessToken(this._speechInfo.key)
