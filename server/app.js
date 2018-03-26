@@ -36,6 +36,7 @@ const chatrobotBehaviorManager = new ChatRobotBehaviorManager(
 chatrobotBehaviorManager.addPhraseList('./chatrobotphraselist.hson')
 chatrobotBehaviorManager.addDefaultReply(`Sorry Dave, I can't do that`)
 chatrobotBehaviorManager.addErrorReply(`Huh?`)
+chatrobotBehaviorManager.addShutdown(`shut down`, `Good bye Dave`)
 
 chatrobotBehaviorManager.addCustom(`Weather.GetCondition`, async function (entities) {
 	const location = entities &&

@@ -117,6 +117,15 @@ class ChatRobot extends EventEmitter {
             console.error(`PARTICLE ERROR: 'eyesSpin': ${err}`)
         })
     }
+    async shutdown() {
+        await this._particle.callFunction({
+            deviceId: this._deviceInfo.deviceId,
+            name: 'shutdown', argument: '',
+            auth: this._deviceInfo.authToken
+        }).catch(err => {
+            console.error(`PARTICLE ERROR: 'shutdown': ${err}`)
+        })
+    }
 
 
     /////////////////////////////////////////////////////
@@ -154,6 +163,7 @@ class ChatRobot extends EventEmitter {
             } else if (msg.data == 'offline') {
                 this.emit('info','Chatbot offline')
                 this.emit('status', this.statusCode.DEVICE_OFFLINE)
+                this._streamingInfo.isConnected = false
             }
         })
 
@@ -208,39 +218,25 @@ class ChatRobot extends EventEmitter {
                 this.emit('info',`Streaming client connected`)
                 
                 this._streamingInfo.isConnected = true
-                sock.setKeepAlive(true, 1000)
+                sock.setKeepAlive(true, 100)
 
                 sock.on('error', (err) => {
                     console.error(err + ' at ' + sock.address + ' ' + sock.remotePort)
-                    this._streamingInfo.isConnected = false
                     this.emit('status', this.statusCode.STREAM_DISCONNECTED)
-
-                    sock.removeAllListeners()
-                    sock.end()
-                    sock.destroy()
-                })
-
-                sock.on('end', (data) => {
-                    console.error('END: ' + sock.remoteAddress + ' ' + sock.remotePort)
-                    this._streamingInfo.isConnected = false
-                    this.emit('status', this.statusCode.STREAM_DISCONNECTED)
-                })
+               })
 
                 sock.on('close', (data) => {
-                    console.error('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort)
+                    console.log('TCP socket closed')
                     this._streamingInfo.isConnected = false
                     this.emit('status', this.statusCode.STREAM_DISCONNECTED)
                 })
 
                 this._streamingInfo.sock = sock
-
                 this.emit('status', this.statusCode.STREAM_CONNECTED)
 
-                
                 this._listenForAudio()
 
                 this.emit('info', 'Chatbot ready!')
-
                 this.emit('status', this.statusCode.CHATBOT_READY)
                 resolve(sock)
             }).listen(this._serverPort)
@@ -333,22 +329,19 @@ class ChatRobot extends EventEmitter {
                 { bitDepth: 16, signed: true },
                 { bitDepth: 8, signed: false })
 
-            var throttle = new Throttle({ bps: 16 * 1024, chunkSize: 16, highWaterMark: 500 })
+            var throttle = new Throttle({ bps: 16 * 1024, chunkSize: 16, highWaterMark: 500 }) 
 
             var stream = readableStream.pipe(pcmTransform).pipe(throttle)
 
-            stream.pipe(sock, { end: false }).on('error', (err) => {
-                this.emit('error', `Streaming Error: ${err}`)
-            })
+            stream.pipe(sock, { end: false })
+   
         
             stream.on(`finish`, () => {
                 resolve()
             })
 
             stream.on('error', (err) => {
-                this.emit('error', `Streaming Error: ${err}`)
-
-            })
+                this.emit('error', `Streaming Error: ${err}`)            })
         })
     }
 }

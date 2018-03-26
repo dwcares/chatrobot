@@ -54,7 +54,10 @@ class ChatRobotBehaviorManager extends EventEmitter {
 
         this._chatrobot.on('message', async (utterance) => {
 
-            if (utterance) {
+            if (utterance && this._shutdownBehavior && utterance.startsWith(this._shutdownBehavior._token)) {
+                await this._shutdownBehavior.run()
+                this.emit('command', 'SHUTDOWN BEHAVIOR')
+            } else if (utterance) {
                 const response = await this._luis.predictIntent(utterance)
                 this.emit('info',`${this._luis.format(response)}` )
 
@@ -121,6 +124,15 @@ class ChatRobotBehaviorManager extends EventEmitter {
             await this._chatrobot.speak(response)
         })
         this._errorBehavior._chatrobot = this._chatrobot
+    }
+    addShutdown(token, response) {
+        this._shutdownBehavior = new ChatRobotBehavior(token, 
+            async function(utterance) {
+                await this._chatrobot.speak(response)
+                await this._chatrobot.playTone('8G4,8F4,8E4,8D4,8C3')
+                await this._chatrobot.shutdown()
+        })
+        this._shutdownBehavior._chatrobot = this._chatrobot
     }
     async start() {
         await this._chatrobot.start()    
