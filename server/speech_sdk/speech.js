@@ -22,7 +22,7 @@ class Speech {
             return this.accessToken
 
         return request.post({
-            url: 'https://api.cognitive.microsoft.com/sts/v1.0/issueToken',
+            url: 'https://westus.api.cognitive.microsoft.com/sts/v1.0/issueToken',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'Content-length': 0,
@@ -45,16 +45,15 @@ class Speech {
 
         switch (gender) {
             case 'male':
-                ssmlPayload = "<speak version='1.0' xml:lang='en-us'><voice xml:lang='en-US' xml:gender='Male' name='Microsoft Server Speech Text to Speech Voice (en-US, BenjaminRUS)'>" + text + "</voice></speak>"
+                ssmlPayload = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="en-US-ChristopherNeural">${text}</voice></speak>`;
                 break
             case 'female':
             default:
-                ssmlPayload = "<speak version='1.0' xml:lang='en-us'><voice xml:lang='en-US' xml:gender='Female' name='Microsoft Server Speech Text to Speech Voice (en-US, ZiraRUS)'>" + text + "</voice></speak>";
+                ssmlPayload = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice style="chat" styledegree="2" name="en-US-JennyNeural">${text}</voice></speak>`;
                 break
         }
-
         return request.post({
-            url: 'https://speech.platform.bing.com/synthesize',
+            url: 'https://westus.tts.speech.microsoft.com/cognitiveservices/v1',
             body: ssmlPayload,
             encoding: null,
             headers: {

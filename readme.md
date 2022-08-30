@@ -7,4 +7,7 @@
 
 ![v0.1 Build](images/chatrobot.v0.1.build.jpg)
 
- docker run -p 3000:3000 -p 5000:5000 --env-file $HOME/docker.env dwcares/chatrobot
+ docker run -p 3000:3000 -p 5000:5000 --env-file docker.env dwcares/chatrobot
+
+docker run -p 3000:3000 -p 5000:5000 --env-file docker.env <token>
+
