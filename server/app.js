@@ -30,7 +30,7 @@ const chatrobotBehaviorManager = new ChatRobotBehaviorManager(
 		appId: process.env.MICROSOFT_LUIS_APPID,
 		appKey: process.env.MICROSOFT_LUIS_KEY,
 		verbose: true
-	})
+	}, true)
 
 
 chatrobotBehaviorManager.addPhraseList('./chatrobotphraselist.hson')
@@ -129,8 +129,25 @@ Shell.events.on('connection', function () {
 })
 
 Shell.events.on('speak', async (message) => {
-	await chatrobot.speak(message)
+	let response = await chatrobotBehaviorManager.speakAndSpell(message)
+
+	Shell.log('\nCHATGPT> ' + response)
+
+	await chatrobot.speak(response)
+
 	Shell.log('*prompt')
 })
+
+Shell.events.on('drive', async (message) => {
+
+	Shell.log('\nDriving ')
+
+	await this._chatrobot.speak(`Ok, let's go!`)
+
+	await this._chatrobot.drive(5)
+
+	Shell.log('*prompt')
+})
+
 
 chatrobotBehaviorManager.start()
