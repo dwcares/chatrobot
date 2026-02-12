@@ -43,6 +43,7 @@ void onMicPlaybackEnd() {
 
 void setup() {
   Serial.begin(115200);
+  Particle.connect();
 
   pinMode(LED_PIN, OUTPUT);
   debouncer.attach(BUTTON_PIN, INPUT_PULLUP);
@@ -62,8 +63,6 @@ void setup() {
   mic.onDisconnected(onMicDisconnected);
   mic.onPlaybackStart(onMicPlaybackStart);
   mic.onPlaybackEnd(onMicPlaybackEnd);
-
-  Particle.connect();
 }
 
 void loop() {
