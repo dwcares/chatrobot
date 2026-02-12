@@ -15,11 +15,31 @@
 SYSTEM_MODE(SEMI_AUTOMATIC);
 SYSTEM_THREAD(ENABLED);
 
-Microstream stream;
+Microstream mic;
 Debounce debouncer = Debounce();
 
 unsigned int ledBreathVal = 0;
 int ledBreathDir = 1;
+
+// --- Callbacks (regular functions, not lambdas — .ino preprocessor breaks on lambdas) ---
+void onMicConnected() {
+  Serial.println("Connected to server");
+  digitalWrite(LED_PIN, HIGH);
+  delay(200);
+  digitalWrite(LED_PIN, LOW);
+}
+
+void onMicDisconnected() {
+  Serial.println("Disconnected from server");
+}
+
+void onMicPlaybackStart() {
+  Serial.println("Playing response...");
+}
+
+void onMicPlaybackEnd() {
+  Serial.println("Playback done");
+}
 
 void setup() {
   Serial.begin(115200);
@@ -28,63 +48,50 @@ void setup() {
   debouncer.attach(BUTTON_PIN, INPUT_PULLUP);
   debouncer.interval(20);
 
-  stream.begin(SERVER_HOST, SERVER_PORT, SERVER_PATH, {
-    .sampleRate = 16000,
-    .bitDepth = 8,
-    .micPin = MIC_PIN,
-    .speakerPin = SPEAKER_PIN,
-    .captureBufferSize = 8192,
-    .playbackBufferSize = 32768
-  });
+  MicrostreamConfig cfg;
+  cfg.sampleRate = 16000;
+  cfg.bitDepth = 8;
+  cfg.micPin = MIC_PIN;
+  cfg.speakerPin = SPEAKER_PIN;
+  cfg.captureBufferSize = 8192;
+  cfg.playbackBufferSize = 32768;
 
-  stream.onConnected([]() {
-    Serial.println("Connected to server");
-    digitalWrite(LED_PIN, HIGH);
-    delay(200);
-    digitalWrite(LED_PIN, LOW);
-  });
+  mic.begin(SERVER_HOST, SERVER_PORT, SERVER_PATH, cfg);
 
-  stream.onDisconnected([]() {
-    Serial.println("Disconnected from server");
-  });
-
-  stream.onPlaybackStart([]() {
-    Serial.println("Playing response...");
-  });
-
-  stream.onPlaybackEnd([]() {
-    Serial.println("Playback done");
-  });
+  mic.onConnected(onMicConnected);
+  mic.onDisconnected(onMicDisconnected);
+  mic.onPlaybackStart(onMicPlaybackStart);
+  mic.onPlaybackEnd(onMicPlaybackEnd);
 
   Particle.connect();
 }
 
 void loop() {
-  stream.update();
+  mic.update();
   debouncer.update();
 
   // Button press = record, release = stop
-  if (debouncer.fell() && stream.isConnected()) {
+  if (debouncer.fell() && mic.isConnected()) {
     Serial.println("Recording...");
-    stream.startRecording();
+    mic.startRecording();
   }
 
-  if (debouncer.rose() && stream.isRecording()) {
+  if (debouncer.rose() && mic.isRecording()) {
     Serial.println("Stopped recording");
-    stream.stopRecording();
+    mic.stopRecording();
   }
 
   updateLed();
 }
 
 void updateLed() {
-  if (stream.isRecording()) {
+  if (mic.isRecording()) {
     // Solid bright while recording
     digitalWrite(LED_PIN, HIGH);
-  } else if (stream.isPlaying()) {
+  } else if (mic.isPlaying()) {
     // Solid bright while playing
     digitalWrite(LED_PIN, HIGH);
-  } else if (stream.isConnected()) {
+  } else if (mic.isConnected()) {
     // Breathing effect when idle + connected
     if (ledBreathVal >= 200) ledBreathDir = -1;
     if (ledBreathVal <= 0) ledBreathDir = 1;
