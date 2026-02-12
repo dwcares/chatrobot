@@ -10,12 +10,14 @@
 Microstream mic;
 
 unsigned long lastStatusTime = 0;
+unsigned long connectedSince = 0;
 unsigned int ledBreathVal = 0;
 int ledBreathDir = 1;
 
 // --- Callbacks ---
 void onMicConnected() {
   Serial.println("Connected to server");
+  connectedSince = millis();
   digitalWrite(LED_PIN, HIGH);
   delay(200);
   digitalWrite(LED_PIN, LOW);
@@ -23,6 +25,7 @@ void onMicConnected() {
 
 void onMicDisconnected() {
   Serial.println("Disconnected from server");
+  connectedSince = 0;
 }
 
 void setup() {
@@ -51,9 +54,11 @@ void loop() {
   // Print status every 5 seconds
   if (millis() - lastStatusTime > 5000) {
     lastStatusTime = millis();
-    Serial.printlnf("Status: %s | Uptime: %lus",
-      mic.isConnected() ? "CONNECTED" : "DISCONNECTED",
-      millis() / 1000);
+    if (mic.isConnected()) {
+      Serial.printlnf("Status: CONNECTED | Uptime: %lus", (millis() - connectedSince) / 1000);
+    } else {
+      Serial.println("Status: DISCONNECTED");
+    }
   }
 
   // LED: breathing when connected, off when disconnected
