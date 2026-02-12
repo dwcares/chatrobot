@@ -8,6 +8,8 @@
  * 5. Server echoes it back to client
  * 6. Client saves echoed audio    → audio/client-received.wav
  *
+ * Uses 8-bit unsigned PCM at 16kHz to match the device firmware.
+ *
  * Usage:  node roundtrip-test.js
  */
 
@@ -18,10 +20,10 @@ const { MicrostreamServer } = require('microstream-server')
 const { MessageType, decode, encodeAudioData, encodeAudioEnd, encodeHeartbeat } = require('../../server/src/Protocol')
 const AudioBuffer = require('../../server/src/AudioBuffer')
 
-// --- Config ---
+// --- Config (matches firmware: 16kHz 8-bit mono) ---
 const PORT = 5111
 const SAMPLE_RATE = 16000
-const BIT_DEPTH = 16
+const BIT_DEPTH = 8
 const CHANNELS = 1
 const TONE_HZ = 440
 const DURATION_S = 2
@@ -29,15 +31,16 @@ const DURATION_S = 2
 const audioDir = path.join(__dirname, 'audio')
 if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir)
 
-// --- Generate test tone (16-bit signed PCM) ---
-function generateSineWav () {
+// --- Generate test tone (8-bit unsigned PCM) ---
+function generateSinePcm () {
   const numSamples = SAMPLE_RATE * DURATION_S
-  const buf = Buffer.alloc(numSamples * 2) // 16-bit = 2 bytes per sample
+  const buf = Buffer.alloc(numSamples) // 8-bit = 1 byte per sample
 
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE
-    const sample = Math.round(Math.sin(2 * Math.PI * TONE_HZ * t) * 32000)
-    buf.writeInt16LE(sample, i * 2)
+    // 8-bit unsigned: silence = 128, range 0-255
+    const sample = Math.round(Math.sin(2 * Math.PI * TONE_HZ * t) * 127 + 128)
+    buf[i] = sample
   }
 
   return buf
@@ -55,8 +58,8 @@ function saveWav (filePath, pcmBuffer) {
 }
 
 // --- Main ---
-const pcm = generateSineWav()
-console.log(`Generated ${DURATION_S}s ${TONE_HZ} Hz tone (${pcm.length} bytes PCM)\n`)
+const pcm = generateSinePcm()
+console.log(`Generated ${DURATION_S}s ${TONE_HZ} Hz tone (${pcm.length} bytes, ${BIT_DEPTH}-bit PCM)\n`)
 
 // Save the original as reference
 saveWav(path.join(audioDir, 'original-tone.wav'), pcm)

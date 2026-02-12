@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 5000
 
 const server = new MicrostreamServer({
   port: PORT,
-  audio: { sampleRate: 16000, bitDepth: 16, channels: 1 }
+  audio: { sampleRate: 16000, bitDepth: 8, channels: 1 }
 })
 
 const pipeline = new SpeechPipeline({
