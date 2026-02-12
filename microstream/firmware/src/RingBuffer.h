@@ -1,8 +1,7 @@
 #ifndef MICROSTREAM_RINGBUFFER_H
 #define MICROSTREAM_RINGBUFFER_H
 
-#include <stdint.h>
-#include <stdlib.h>
+#include "application.h"
 
 /**
  * Thread-safe(ish) circular buffer for audio samples.

@@ -1,5 +1,4 @@
 #include "Protocol.h"
-#include <string.h>
 
 namespace MicrostreamProtocol {
 

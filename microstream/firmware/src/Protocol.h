@@ -1,7 +1,7 @@
 #ifndef MICROSTREAM_PROTOCOL_H
 #define MICROSTREAM_PROTOCOL_H
 
-#include <stdint.h>
+#include "application.h"
 
 /**
  * Binary message protocol matching the server-side Protocol.js.
