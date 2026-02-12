@@ -1,0 +1,15 @@
+{
+  "name": "microstream-example",
+  "version": "0.1.0",
+  "description": "Voice assistant example using microstream + OpenAI",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "microstream-server": "file:../../server",
+    "openai": "^4.20.0",
+    "dotenv": "^16.3.0"
+  },
+  "license": "MIT"
+}
